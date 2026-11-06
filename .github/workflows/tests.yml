@@ -18,4 +18,4 @@ jobs:
         env:
           CONSULT_FAKE_LLM: "1"
           CONSULT_DISABLE_SCHEDULER: "1"
-        run: pytest tests/ -q
+        run: python -m pytest tests/ -q
