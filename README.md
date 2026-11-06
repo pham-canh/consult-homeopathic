@@ -2,6 +2,8 @@
 
 **AI-assisted patient intake with a licensed doctor in the loop.**
 
+[![tests](https://github.com/pham-canh/consult-homeopathic/actions/workflows/tests.yml/badge.svg)](https://github.com/pham-canh/consult-homeopathic/actions/workflows/tests.yml)
+
 Event: [Vultr: Agent Rush Hackathon](https://lablab.ai/ai-hackathons/vultr-hackathon)
 Live demo: https://consult-homeopathic.207.148.72.102.sslip.io/
 Challenge: **2 — Powering the Future of Work**
@@ -37,6 +39,16 @@ The code is complete; there is no demo video in this repository by request.
 Core and stretch features from the project overview are therefore present. The
 only deliberately excluded items are real patient data, payments, video calls,
 doctor identity verification, and automated diagnosis or prescribing.
+
+## Screenshots
+
+Patient intake with lab upload:
+
+![Patient intake](docs/ui.png)
+
+Doctor review dashboard with the structured case and audit trail:
+
+![Doctor dashboard](docs/doctor.png)
 
 ## Architecture
 
@@ -189,6 +201,7 @@ To make step 5 instant in a demo, set `FOLLOWUP_DAYS=0`.
 
 - `docs/SUBMISSION.md` — title, descriptions, tags, limitations
 - `docs/ARCHITECTURE.md` — flow and threat boundaries
+- `docs/ui.png`, `docs/doctor.png` — intake and dashboard screenshots
 - No video is included by request.
 
 ## What is deliberately out of scope
