@@ -62,12 +62,29 @@ static frontend, and every model call goes through
 cd consult-homeopathic
 python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt -r requirements-dev.txt
-cp .env.example .env      # fill INFERENCE_MODEL and INFERENCE_API_KEY
+cp .env.example .env      # fill ONE provider below
 python3 app.py            # http://127.0.0.1:8000
 ```
 
-Without an inference key the app still runs and says so: the intake falls back to
-the deterministic rule engine, and `/healthz` reports `llm_key: false`.
+### Pick any provider — no model is fixed
+
+Fill whichever key and model you have. The app uses the first provider with a
+key, or the one named in `INFERENCE_PROVIDER`. Model ids are never hard-coded.
+
+| Provider | Key env | Model env | Base URL default |
+|---|---|---|---|
+| Vultr (submitted demo) | `VULTR_API_KEY` | `VULTR_MODEL` | `api.vultrinference.com/v1` |
+| OpenAI / ChatGPT | `OPENAI_API_KEY` | `OPENAI_MODEL` | `api.openai.com/v1` |
+| Anthropic / Claude | `ANTHROPIC_API_KEY` | `ANTHROPIC_MODEL` | `api.anthropic.com/v1` |
+| Google / Gemini | `GEMINI_API_KEY` or `GOOGLE_API_KEY` | `GEMINI_MODEL` | `generativelanguage.googleapis.com/v1beta` |
+| Any OpenAI-compatible | `INFERENCE_API_KEY` | `INFERENCE_MODEL` | set `INFERENCE_BASE_URL` |
+
+`INFERENCE_MODEL` also works as a shared fallback for any provider. Aliases
+(`chatgpt`, `claude`, `google`, `custom`) are accepted in `INFERENCE_PROVIDER`.
+`/healthz` shows the active provider, the model, and the configured slots.
+
+Without a key the app still runs and says so: the intake falls back to the
+deterministic rule engine, and `/healthz` reports `llm_key: false`.
 
 Run the tests (no network, no key):
 
@@ -103,6 +120,20 @@ One JSON document is shared by both flows. Key fields: `case_id`, `patient`
 
 The app runs directly on an Ubuntu 24.04 VM (not in a container) so it can own
 SQLite and send mail.
+
+**One-command update from the developer machine** (needs SSH access + rsync):
+
+```bash
+./deploy/deploy.sh                    # uses the `vultr` SSH alias
+CONSULT_HOST=root@1.2.3.4 ./deploy/deploy.sh
+```
+
+`vultr` is a normal `~/.ssh/config` Host entry (HostName, User, IdentityFile).
+It rsyncs the tree to `/opt/consult`, installs requirements, restarts
+`consult`, and prints `/healthz`. `.env` stays on the server and is never
+copied; `.venv`, `out`, and caches are excluded.
+
+First-time setup on a fresh VM:
 
 ```bash
 sudo adduser --system --group --home /opt/consult consult

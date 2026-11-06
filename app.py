@@ -83,6 +83,7 @@ def healthz() -> dict:
         "provider": inference.provider(),
         "model": inference.model_name() or None,
         "engine": inference.engine_label(),
+        "providers": inference.configured_providers(),
         "mode": "rules (demo)" if config.demo_mode() else "live",
         "email": "smtp" if config.env("SMTP_HOST") else "file (simulated mailbox)",
     }
