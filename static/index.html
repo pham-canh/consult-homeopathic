@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Consult — AI-assisted patient intake (prototype)</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="dot">✚</div>
+      <div>Consult <small>Homeopathic Physicians · hackathon prototype</small></div>
+    </div>
+    <div class="top-actions">
+      <span class="pill grey" id="engine-pill">checking engine…</span>
+      <a class="btn ghost small" href="/doctor">Doctor dashboard</a>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="disclaimer">
+      <div>⚠</div>
+      <div><strong>Prototype, not medical care.</strong> This demo uses synthetic
+      patients. The AI never diagnoses or prescribes; a licensed doctor reviews and
+      approves every plan. In an emergency, call your local emergency number.</div>
+    </div>
+
+    <section class="hero">
+      <div>
+        <span class="pill">Vultr: Agent Rush · Challenge 2</span>
+        <h1>See a doctor in minutes, not a lost afternoon.</h1>
+        <p class="lead">An AI intake agent gathers the history, screens for
+        emergencies, and prepares a structured case. A real clinician reviews it
+        and decides. Information work is automated; judgment stays human.</p>
+
+        <div class="card pad">
+          <h3>What happens to your case</h3>
+          <div class="steps">
+            <div class="step"><div class="n">1</div><div><b>Conversational intake</b><span>Tell us the symptom, how long, allergies, medicines, and an email.</span></div></div>
+            <div class="step"><div class="n">2</div><div><b>Emergency gate</b><span>A deterministic red-flag check stops the flow and tells you to seek emergency care.</span></div></div>
+            <div class="step"><div class="n">3</div><div><b>Care options</b><span>Two or three paths with plain-language reasons; you choose one.</span></div></div>
+            <div class="step"><div class="n">4</div><div><b>Doctor review</b><span>A clinician edits and approves the plan on the dashboard.</span></div></div>
+            <div class="step"><div class="n">5</div><div><b>Delivery</b><span>The approved plan is emailed to you, with a follow-up check.</span></div></div>
+          </div>
+          <div class="spacer"></div>
+          <p class="small muted">All model calls go through Vultr Serverless Inference.
+          The app and database run on a Vultr VM. No real patient data is used.</p>
+        </div>
+      </div>
+
+      <div class="card chat-card">
+        <div class="chat-head">
+          <div class="who">
+            <div class="avatar">AI</div>
+            <div><b>Intake assistant</b><br><span class="small muted" id="status-line">Ready when you are</span></div>
+          </div>
+          <span class="pill" id="case-status">new</span>
+        </div>
+
+        <div class="start-form" id="start-form">
+          <div class="row">
+            <div class="field"><label>Your name (optional)</label><input id="name" placeholder="Alex Nguyen"></div>
+            <div class="field"><label>Email for the plan</label><input id="email" type="email" placeholder="alex@example.test"></div>
+          </div>
+          <button class="btn" id="start-btn">Start intake</button>
+          <div class="samples">
+            <button class="chip" data-sample="routine">Try: cough + fever for 5 days</button>
+            <button class="chip" data-sample="emergency">Try: chest pain (safety demo)</button>
+          </div>
+          <p class="small muted">Synthetic demo data only. Do not enter real medical records.</p>
+        </div>
+
+        <div id="chat-area" class="hidden">
+          <div class="chat-log" id="chat-log"></div>
+          <div class="options" id="options"></div>
+          <div id="emergency-slot"></div>
+          <form class="chat-input" id="chat-form">
+            <input id="chat-text" placeholder="Describe the symptom…" autocomplete="off">
+            <button class="btn" id="send-btn" type="submit">Send</button>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Doctor dashboard — Consult (prototype)</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="dot">✚</div>
+      <div>Consult <small>Doctor dashboard · prototype</small></div>
+    </div>
+    <div class="top-actions">
+      <span class="pill amber">Synthetic patients only</span>
+      <a class="btn ghost small" href="/">Patient intake</a>
+      <button class="btn small" id="refresh-btn">Refresh</button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="disclaimer">
+      <div>⚠</div>
+      <div><strong>Doctor in the loop.</strong> The AI prepared this case; it did
+      not diagnose or prescribe. Review the record, edit the plan, and approve.
+      Nothing is emailed to the patient before you approve.</div>
+    </div>
+
+    <div class="layout">
+      <section>
+        <div class="tabs" id="tabs">
+          <button class="tab active" data-status="pending_review">Pending</button>
+          <button class="tab" data-status="">All</button>
+          <button class="tab" data-status="emergency">Emergency</button>
+          <button class="tab" data-status="delivered">Delivered</button>
+        </div>
+        <div class="list" id="case-list"><p class="muted small">Loading cases…</p></div>
+      </section>
+
+      <section class="card pad" id="detail">
+        <p class="muted">Select a case on the left to review it.</p>
+      </section>
+    </div>
+
+    <section class="card pad" style="margin-top:20px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+        <h2 style="margin:0">Outbox (simulated mailbox)</h2>
+        <span class="small muted">Sends real email when SMTP is configured</span>
+      </div>
+      <div class="mailbox" id="mailbox"><p class="muted small">No emails yet.</p></div>
+      <pre class="email hidden" id="email-preview"></pre>
+    </section>
+  </main>
+
+  <script src="/static/doctor.js"></script>
+</body>
+</html>

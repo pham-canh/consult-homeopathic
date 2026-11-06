@@ -1,0 +1,23 @@
+[Unit]
+Description=Consult Homeopathic Physicians (FastAPI prototype)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=consult
+Group=consult
+WorkingDirectory=/opt/consult
+EnvironmentFile=/etc/consult/consult.env
+ExecStart=/opt/consult/.venv/bin/python /opt/consult/app.py
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=20
+
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/lib/consult
+
+[Install]
+WantedBy=multi-user.target
