@@ -129,6 +129,12 @@ for example `https://consult.<vm-ip>.sslip.io/`.
 4. Open the outbox and show the exact email the patient received.
 5. Close on value: a case prepared in minutes instead of a full appointment slot.
 
+## Submission assets
+
+- `docs/SUBMISSION.md` — title, short/long description, tags, honest limitations
+- `docs/VIDEO_SCRIPT.md` — two-minute shot list with narration
+- `docs/ui.png`, `docs/doctor.png` — current screenshots
+
 ## What is deliberately out of scope
 
 Real patient data, real payments, video calls, doctor identity verification, and
