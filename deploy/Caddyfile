@@ -1,6 +1,0 @@
-# Add this block to /etc/caddy/Caddyfile next to the existing demo.
-# sslip.io resolves any prefix to the VM's public IP, so Caddy can issue TLS.
-consult.139.180.147.61.sslip.io {
-    encode gzip
-    reverse_proxy 127.0.0.1:8000
-}

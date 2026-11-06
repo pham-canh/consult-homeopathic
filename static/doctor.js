@@ -90,8 +90,9 @@ async function selectCase(caseId) {
 }
 
 function renderDetail(c) {
-  const canReview = ["pending_review", "intake"].includes(c.status);
+  const canReview = c.status === "pending_review";
   const patient = c.patient || {};
+  const warnings = [...(c.allergy_warnings || []), ...(c.interaction_warnings || [])];
   $("detail").innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
       <div>
@@ -124,10 +125,34 @@ function renderDetail(c) {
       <div class="small muted">Safety notes</div>${tags(c.summary?.safety_notes, "warn")}
     </div>
 
-    ${(c.allergy_warnings || []).length ? `
+    ${c.needs_attention ? `
       <div class="emergency-banner" style="margin:0">
-        Allergy check: ${escapeHtml(c.allergy_warnings.join("; "))}
+        Needs attention: the follow-up reported a red flag. Contact the patient now.
       </div>` : ""}
+
+    ${warnings.length ? `
+      <div class="emergency-banner" style="margin:0">
+        Safety check: ${escapeHtml(warnings.join("; "))}
+      </div>` : ""}
+
+    <div>
+      <h3>Uploaded reports</h3>
+      ${(c.reports || []).length ? (c.reports || []).map((r) => `
+        <div class="card pad soft" style="margin-bottom:8px">
+          <b>${escapeHtml(r.filename)}</b>
+          <div class="small muted">${escapeHtml(r.uploaded_at)} · ${escapeHtml(r.summary)}</div>
+          ${(r.findings || []).length ? `
+          <table class="labs">
+            <thead><tr><th>Test</th><th>Value</th><th>Reference</th><th></th></tr></thead>
+            <tbody>${r.findings.map((f) => `
+              <tr><td>${escapeHtml(f.test)}</td>
+                  <td>${escapeHtml(f.value)} ${escapeHtml(f.unit || "")}</td>
+                  <td>${escapeHtml(f.reference || "")}</td>
+                  <td>${f.flag ? `<span class="pill ${f.flag === "high" ? "red" : "amber"}">${escapeHtml(f.flag)}</span>` : ""}</td>
+              </tr>`).join("")}</tbody>
+          </table>` : ""}
+        </div>`).join("") : `<p class="muted small">No reports attached.</p>`}
+    </div>
 
     <div>
       <h3>Conversation</h3>
@@ -164,6 +189,17 @@ function renderDetail(c) {
         <dt>Email</dt><dd>${escapeHtml(c.email?.mode || "—")} → ${escapeHtml(c.email?.to || "—")}</dd>
       </dl>
       <div class="spacer"></div>
+      <div class="card pad soft" style="margin-bottom:10px">
+        <div class="small muted">Follow-up agent</div>
+        ${c.follow_up?.link ? `<div class="small">Public check-in link:
+          <a href="${escapeHtml(c.follow_up.link)}" target="_blank" rel="noopener">
+          ${escapeHtml(c.follow_up.link)}</a></div>` : ""}
+        <div class="small">Due: ${escapeHtml(c.follow_up?.due_at || "—")} ·
+          sent: ${escapeHtml(c.follow_up?.sent_at || "not yet")}</div>
+        ${c.status === "delivered" && c.follow_up?.link ?
+          `<div class="spacer"></div><button class="btn ghost small" id="send-followup-btn">
+             Send check-in email now</button>` : ""}
+      </div>
       <div class="field"><label>Follow-up report (patient says how they feel)</label>
         <textarea id="followup" placeholder="Still coughing, but the fever is gone."></textarea></div>
       <div class="spacer"></div>
@@ -181,6 +217,8 @@ function renderDetail(c) {
   if (approve) approve.onclick = approveCase;
   const follow = $("followup-btn");
   if (follow) follow.onclick = sendFollowUp;
+  const sendNow = $("send-followup-btn");
+  if (sendNow) sendNow.onclick = sendFollowUpNow;
 }
 
 async function approveCase() {
@@ -225,6 +263,24 @@ async function sendFollowUp() {
     loadCases();
   } catch (err) {
     alert(`Could not log follow-up: ${err.message}`);
+  }
+}
+
+async function sendFollowUpNow() {
+  if (!activeCase) return;
+  const btn = $("send-followup-btn");
+  btn.disabled = true;
+  btn.textContent = "Sending…";
+  try {
+    const data = await api(`/api/cases/${activeCase.case_id}/follow-up/send`,
+      { method: "POST" });
+    activeCase = data.case;
+    renderDetail(activeCase);
+    loadMailbox();
+  } catch (err) {
+    alert(`Could not send the check-in: ${err.message}`);
+    btn.disabled = false;
+    btn.textContent = "Send check-in email now";
   }
 }
 

@@ -47,8 +47,8 @@ function renderOptions(options) {
   (options || []).forEach((option) => {
     const btn = document.createElement("button");
     btn.className = "option";
-    btn.innerHTML = `<b>${escapeHtml(option.name)}</b><span>${escapeHtml(option.why || "")}</span>`;
-    btn.onclick = () => choose(option.name);
+    btn.innerHTML = `<b>${escapeHtml(option.label || option.name)}</b><span>${escapeHtml(option.why || "")}</span>`;
+    btn.onclick = () => choose(option.name, option.label || option.name);
     box.appendChild(btn);
   });
 }
@@ -59,6 +59,7 @@ function showEmergency(text) {
   slot.innerHTML = `<div class="emergency-banner">${escapeHtml(text)}</div>`;
   $("chat-text").disabled = true;
   $("send-btn").disabled = true;
+  $("attach-btn").disabled = true;
   $("options").innerHTML = "";
 }
 
@@ -101,7 +102,7 @@ async function send(text) {
     addMessage(data.reply, data.emergency ? "emergency" : "agent", data.engine || "");
     setStatus(data.case);
     if (data.emergency) {
-      showEmergency("Automated intake stopped. Please seek emergency care now.");
+      showEmergency(data.reply);
       return;
     }
     if (data.case.care_options?.length && data.case.status === "intake") {
@@ -114,10 +115,10 @@ async function send(text) {
   }
 }
 
-async function choose(option) {
+async function choose(option, label = option) {
   if (!caseId || finished) return;
   $("options").innerHTML = "";
-  addMessage(`I choose: ${option}`, "patient", "you");
+  addMessage(`I choose: ${label}`, "patient", "you");
   try {
     const data = await api(`/api/cases/${caseId}/choose`, {
       method: "POST",
@@ -131,6 +132,7 @@ async function choose(option) {
     finished = true;
     $("chat-text").disabled = true;
     $("send-btn").disabled = true;
+    $("attach-btn").disabled = true;
   } catch (err) {
     addMessage(`Could not submit the choice: ${err.message}`, "emergency");
   }
@@ -141,6 +143,32 @@ $("chat-form").onsubmit = (event) => {
   event.preventDefault();
   send($("chat-text").value);
 };
+
+async function uploadReport(file) {
+  if (!caseId || finished || !file) return;
+  const note = $("upload-note");
+  note.textContent = `Reading ${file.name}…`;
+  const body = new FormData();
+  body.append("file", file);
+  try {
+    const res = await fetch(`/api/intake/${caseId}/report`, {
+      method: "POST", body,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+    const report = data.case.reports[data.case.reports.length - 1];
+    addMessage(`Report received: ${report.filename}. ${report.summary}`,
+      "agent", "report-reader");
+    note.textContent = `Parsed ${report.findings.length} value(s).`;
+  } catch (err) {
+    note.textContent = `Could not read the report: ${err.message}`;
+  } finally {
+    $("report-file").value = "";
+  }
+}
+
+$("attach-btn").onclick = () => $("report-file").click();
+$("report-file").onchange = () => uploadReport($("report-file").files[0]);
 
 document.querySelectorAll("[data-sample]").forEach((chip) => {
   chip.onclick = () => {

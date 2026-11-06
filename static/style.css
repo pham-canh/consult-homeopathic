@@ -197,3 +197,17 @@ pre.email { white-space: pre-wrap; background: #0f1f1c; color: #d7f0e9; padding:
 .right { text-align: right; }
 .spacer { height: 10px; }
 .hidden { display: none !important; }
+
+.wrap.narrow { max-width: 760px; }
+.card.soft { box-shadow: none; background: #f6faf8; }
+.btn.icon { padding: 10px 12px; font-size: 16px; line-height: 1; }
+a { color: var(--teal); }
+.labs { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+.labs th, .labs td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--line); }
+.labs th { color: var(--muted); font-weight: 600; }
+.small.warn { color: var(--amber); font-weight: 600; }
+@media (max-width: 640px) {
+  .wrap { padding: 16px; }
+  .kv { grid-template-columns: 110px 1fr; }
+  .layout { grid-template-columns: 1fr; }
+}

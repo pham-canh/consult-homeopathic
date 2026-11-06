@@ -1,3 +1,5 @@
 # Tested on Python 3.12 (Vultr VM) and 3.13 (local).
 fastapi==0.115.6
 uvicorn==0.34.0
+python-multipart==0.0.20
+pypdf==5.1.0

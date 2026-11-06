@@ -33,6 +33,10 @@ RULES: list[tuple[str, str]] = [
     ("severe head injury", r"\bhead\s+injury\b.*\b(vomit|confus|unconscious)\w*|"
                            r"\bhit\s+(my\s+)?head\b.*\b(vomit|confus|unconscious)\w*"),
     ("sudden severe headache", r"\b(worst|thunderclap|sudden\s+severe)\s+headache\b"),
+    ("stiff neck or confusion", r"\bstiff\s+neck\b|"
+                                r"\bneck\s+(?:is\s+|feels?\s+)?stiff\b|"
+                                r"\bconfus(?:ed|ion)\b|\bdisoriented\b|"
+                                r"\baltered\s+mental\s+status\b"),
     ("pregnancy bleeding", r"\bpregnan\w*\b.*\bbleeding\b|\bbleeding\b.*\bpregnan\w*\b"),
 ]
 

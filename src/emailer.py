@@ -1,4 +1,4 @@
-"""Deliver the doctor-approved plan.
+"""Deliver the doctor-approved plan, follow-up check-ins, and alerts.
 
 If SMTP credentials are configured the message is sent for real. Otherwise it is
 written to the local mailbox directory and recorded as `file` mode, so the demo
@@ -11,6 +11,10 @@ from email.message import EmailMessage
 from pathlib import Path
 
 from config import env, mailbox_dir
+
+
+def public_url() -> str:
+    return env("CONSULT_PUBLIC_URL", "http://127.0.0.1:8000").rstrip("/")
 
 
 def compose(case: dict) -> tuple[str, str, str]:
@@ -35,6 +39,13 @@ def compose(case: dict) -> tuple[str, str, str]:
         lines += ["Prescription:", doctor["prescription"].strip(), ""]
     if doctor.get("notes"):
         lines += ["Doctor notes:", doctor["notes"].strip(), ""]
+    if case.get("follow_up", {}).get("token"):
+        link = f"{public_url()}/follow-up/{case['follow_up']['token']}"
+        lines += [
+            "Follow-up check:",
+            f"We will check in on you. You can also report how you feel here: {link}",
+            "",
+        ]
     lines += [
         "This is a hackathon prototype, not a medical device. It does not "
         "provide emergency care. If your symptoms worsen or you feel unsafe, "
@@ -45,15 +56,36 @@ def compose(case: dict) -> tuple[str, str, str]:
     return to_addr, subject, "\n".join(lines)
 
 
-def send(case: dict) -> dict:
-    to_addr, subject, body = compose(case)
+def compose_followup(case: dict) -> tuple[str, str, str]:
+    from text import FOLLOWUP_CHECKIN, fill
+
+    patient = case["patient"]
+    to_addr = patient.get("email") or "patient@example.test"
+    subject = f"Check-in for case {case['case_id']} — Consult Homeopathic Physicians"
+    link = f"{public_url()}/follow-up/{case['follow_up']['token']}"
+    body = "\n".join([
+        fill(FOLLOWUP_CHECKIN, name=patient.get("name") or "there",
+             case_id=case["case_id"]),
+        "",
+        link,
+        "",
+        "If this is an emergency, call your local emergency number instead of "
+        "waiting for a reply.",
+        "",
+        "— Consult Homeopathic Physicians (prototype)",
+    ])
+    return to_addr, subject, body
+
+
+def _deliver(to_addr: str, subject: str, body: str, case_id: str,
+             kind: str) -> dict:
     host = env("SMTP_HOST")
+    message = EmailMessage()
+    message["From"] = env("SMTP_FROM", "clinic@example.test")
+    message["To"] = to_addr
+    message["Subject"] = subject
+    message.set_content(body)
     if host:
-        message = EmailMessage()
-        message["From"] = env("SMTP_FROM", "clinic@example.test")
-        message["To"] = to_addr
-        message["Subject"] = subject
-        message.set_content(body)
         port = int(env("SMTP_PORT", "587") or 587)
         with smtplib.SMTP(host, port, timeout=20) as smtp:
             if env("SMTP_STARTTLS", "1") not in {"0", "false", "no"}:
@@ -62,13 +94,37 @@ def send(case: dict) -> dict:
             if user:
                 smtp.login(user, env("SMTP_PASS"))
             smtp.send_message(message)
-        return {"to": to_addr, "subject": subject, "mode": "smtp", "path": ""}
+        return {"to": to_addr, "subject": subject, "mode": "smtp", "path": "",
+                "kind": kind}
 
-    path = Path(mailbox_dir()) / f"{case['case_id']}.eml"
-    message = EmailMessage()
-    message["From"] = env("SMTP_FROM", "clinic@example.test")
-    message["To"] = to_addr
-    message["Subject"] = subject
-    message.set_content(body)
+    suffix = "" if kind == "plan" else f"-{kind}"
+    path = Path(mailbox_dir()) / f"{case_id}{suffix}.eml"
     path.write_text(message.as_string(), encoding="utf-8")
-    return {"to": to_addr, "subject": subject, "mode": "file", "path": str(path)}
+    return {"to": to_addr, "subject": subject, "mode": "file", "path": str(path),
+            "kind": kind}
+
+
+def send(case: dict) -> dict:
+    to_addr, subject, body = compose(case)
+    return _deliver(to_addr, subject, body, case["case_id"], "plan")
+
+
+def send_followup_checkin(case: dict) -> dict:
+    to_addr, subject, body = compose_followup(case)
+    return _deliver(to_addr, subject, body, case["case_id"], "followup")
+
+
+def send_alert(case: dict, reason: str) -> dict | None:
+    """Notify the clinic when a follow-up escalates. Optional in the demo."""
+    to_addr = env("CONSULT_DOCTOR_EMAIL")
+    if not to_addr:
+        return None
+    subject = f"ESCALATION {case['case_id']} — patient reported a red flag"
+    body = "\n".join([
+        f"Case {case['case_id']} needs attention.",
+        f"Reason: {reason}",
+        f"Patient: {case['patient'].get('name') or 'unnamed'}",
+        "",
+        "Open the doctor dashboard: " + public_url() + "/doctor?case=" + case["case_id"],
+    ])
+    return _deliver(to_addr, subject, body, case["case_id"], "alert")

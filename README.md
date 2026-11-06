@@ -1,75 +1,72 @@
 # Consult Homeopathic Physicians
 
-**AI-assisted patient intake with a doctor in the loop.**
+**AI-assisted patient intake with a licensed doctor in the loop.**
 
 Event: [Vultr: Agent Rush Hackathon](https://lablab.ai/ai-hackathons/vultr-hackathon)
+Live demo: https://consult-homeopathic.207.148.72.102.sslip.io/
 Challenge: **2 — Powering the Future of Work**
 
-**Live demo:** <https://consult.139.180.147.61.sslip.io/> ·
-**Doctor dashboard:** <https://consult.139.180.147.61.sslip.io/doctor> ·
-**Health:** <https://consult.139.180.147.61.sslip.io/healthz>
-
-![Patient intake](docs/ui.png)
+> This is the completed, independently deployed build. It does not share
+> a server, database, service, or deployment with the Blast Radius Zero entry.
+> The previous prototype remains an archive; this tree is the submission build.
 
 The agent collects symptoms and history in a short conversation, screens for
-emergency red flags, proposes care options, and prepares a structured case. A
-licensed doctor reviews that case on a dashboard, edits the plan, and approves
-it. Only then is the plan emailed to the patient. The agent never diagnoses and
-never prescribes.
+emergency red flags, reads an uploaded lab report, proposes care options, and
+prepares a structured case. A licensed doctor reviews that case on a dashboard,
+edits the plan, and approves it. Only then is the plan emailed to the patient.
+The agent never diagnoses and never prescribes.
 
-## Why this fits Challenge 2
+The code is complete; there is no demo video in this repository by request.
 
-Challenge 2 is an enterprise multi-step workflow, not a code sandbox. This app is
-four actors and seven steps in one public product:
+## What is in this build
+
+| Area | Implemented |
+|---|---|
+| Conversational intake | Plain-language chat with follow-up questions and structured extraction |
+| Emergency gate | Deterministic red-flag rules run before every model call; negation-aware; cannot be overridden |
+| Lab report reader | `.txt`, `.md`, `.csv`, `.pdf` upload; deterministic value parsing plus an optional model summary; abnormal values flagged |
+| Care options | Two or three care paths with plain-language reasons; the patient chooses one |
+| Doctor dashboard | Review queue, full transcript, structured summary, allergy and interaction warnings, report findings, audit trail |
+| Human approval | `/approve` is the only path that sends a plan; approval is single-use and blocked for emergency cases |
+| Email delivery | Real SMTP when configured, otherwise a labelled `.eml` outbox |
+| Follow-up agent | Check-in is scheduled after approval, emailed with a token link, and escalates automatically on a red flag |
+| Safety checks | Allergy cross-reactivity and a short, visible drug-interaction list |
+| Audit trail | Every patient, agent, safety, and doctor action is timestamped |
+| Operations | Health check, SQLite persistence, Dockerfile, systemd unit, Caddy HTTPS, Vultr provisioning script |
+
+Core and stretch features from the project overview are therefore present. The
+only deliberately excluded items are real patient data, payments, video calls,
+doctor identity verification, and automated diagnosis or prescribing.
+
+## Architecture
 
 ```
 Patient browser ─┐
-                 ├─ FastAPI on a Vultr VM ── Vultr Serverless Inference
-Doctor browser  ─┘        │
-                          ├── SQLite case store + audit trail
-                          └── email delivery (SMTP or local mailbox)
+                 ├─ FastAPI on a dedicated Vultr VM ── Vultr Serverless Inference
+Doctor browser  ─┤        │
+Follow-up link  ─┘        ├── SQLite case store + audit trail + follow-up queue
+                          ├── uploaded reports on local disk
+                          └── email (SMTP or labelled .eml outbox)
 ```
 
-1. Patient intake conversation
-2. Deterministic emergency gate
-3. Structured case extraction
-4. Care options and patient choice
-5. Doctor review and approval
-6. Email delivery
-7. Follow-up check with escalation
-
-Vultr is the central backend: the VM runs the orchestration, the database, the
-static frontend, and every model call goes through
-`https://api.vultrinference.com/v1`.
-
-## Safety design
-
-- **No diagnosis, no prescribing by AI.** The agent only gathers information and
-  drafts a summary. Prescription text is entered by the doctor.
-- **Human approval is a hard gate.** `/approve` is the only path that sends
-  email; the agent cannot call it.
-- **Emergency screening is deterministic.** A regex red-flag list runs before the
-  model. A model flag can also stop the flow, but the rule gate can never be
-  overridden. Negated phrases ("no chest pain") are ignored.
-- **Honest labels.** Every reply records its engine (`vultr / <model>` or
-  `rules (...)`). A fallback is never presented as a model answer.
-- **Synthetic data only.** The prototype is not a medical device and must not be
-  used with real patient records.
+One JSON case record is shared by both flows. Key fields: `case_id`, `patient`
+(name, email, age, sex, allergies, medications, history),
+`chief_complaint`, `symptoms`, `duration_days`, `severity`, `red_flags`,
+`urgency`, `reports`, `care_options`, `selected_option`, `summary`, `doctor`,
+`email`, `follow_up`, `transcript`, `needs_attention`, and `status`
+(`intake` → `pending_review` → `delivered`, or `emergency`).
 
 ## Run locally
 
 ```bash
-cd consult-homeopathic
 python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt -r requirements-dev.txt
-cp .env.example .env      # fill ONE provider below
+cp .env.example .env      # fill ONE provider
 python3 app.py            # http://127.0.0.1:8000
 ```
 
-### Pick any provider — no model is fixed
-
-Fill whichever key and model you have. The app uses the first provider with a
-key, or the one named in `INFERENCE_PROVIDER`. Model ids are never hard-coded.
+No model is fixed. The app uses the first provider with a key, or the one named
+in `INFERENCE_PROVIDER`:
 
 | Provider | Key env | Model env | Base URL default |
 |---|---|---|---|
@@ -79,97 +76,127 @@ key, or the one named in `INFERENCE_PROVIDER`. Model ids are never hard-coded.
 | Google / Gemini | `GEMINI_API_KEY` or `GOOGLE_API_KEY` | `GEMINI_MODEL` | `generativelanguage.googleapis.com/v1beta` |
 | Any OpenAI-compatible | `INFERENCE_API_KEY` | `INFERENCE_MODEL` | set `INFERENCE_BASE_URL` |
 
-`INFERENCE_MODEL` also works as a shared fallback for any provider. Aliases
-(`chatgpt`, `claude`, `google`, `custom`) are accepted in `INFERENCE_PROVIDER`.
-`/healthz` shows the active provider, the model, and the configured slots.
-
-Without a key the app still runs and says so: the intake falls back to the
+Without a key the app still runs and says so: intake falls back to the
 deterministic rule engine, and `/healthz` reports `llm_key: false`.
 
-Run the tests (no network, no key):
+Run the tests (no network, no key, 46 tests):
 
 ```bash
-CONSULT_FAKE_LLM=1 python3 -m pytest tests/ -q
+CONSULT_FAKE_LLM=1 CONSULT_DISABLE_SCHEDULER=1 python3 -m pytest tests/ -q
 ```
 
 ## API
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/healthz` | storage, model, key, mode |
+| GET | `/healthz` | storage, model, key, scheduler |
 | GET | `/` | patient intake |
 | GET | `/doctor` | doctor dashboard |
-| POST | `/api/intake/start` | open a case |
-| POST | `/api/intake/{id}/message` | one patient turn (safety gate + LLM) |
+| GET | `/follow-up/{token}` | public check-in page |
+| POST | `/api/intake/start` | open a case (name, email) |
+| POST | `/api/intake/{id}/message` | one patient turn (safety gate + model) |
+| POST | `/api/intake/{id}/report` | upload a lab report |
 | POST | `/api/cases/{id}/choose` | choose a care option |
 | GET | `/api/doctor/cases?status=` | review queue |
-| POST | `/api/cases/{id}/approve` | doctor decision + email |
-| POST | `/api/cases/{id}/follow-up` | patient check-in, escalates on red flags |
-| GET | `/api/mailbox` | sent-plan outbox |
-| GET | `/api/cases/{id}` | full case, audit trail, allergy warnings |
+| POST | `/api/cases/{id}/approve` | doctor decision, schedule follow-up, email |
+| POST | `/api/cases/{id}/follow-up` | log a follow-up report |
+| POST | `/api/cases/{id}/follow-up/send` | send the scheduled check-in now |
+| GET/POST | `/api/follow-up/{token}` | read/submit the public check-in |
+| GET | `/api/mailbox` | sent-plan and check-in outbox |
+| GET | `/api/cases/{id}` | full case, reports, audit trail, warnings |
 
-## The case record
+Invalid state transitions return `409`; invalid uploads return `400`; unknown
+cases and tokens return `404`.
 
-One JSON document is shared by both flows. Key fields: `case_id`, `patient`
-(age, allergies, medications, history, email), `chief_complaint`, `symptoms`,
-`duration_days`, `severity`, `red_flags`, `urgency`, `care_options`,
-`selected_option`, `summary`, `doctor`, `email`, `transcript`, `status`
-(`intake` → `pending_review` → `delivered`, or `emergency`).
+## Safety design
 
-## Deploy on Vultr
+- **No diagnosis, no prescribing by AI.** The agent gathers information and
+  drafts a summary. Prescription text is entered by the doctor.
+- **Human approval is a hard gate.** `/approve` is the only path that sends a
+  plan, requires `pending_review`, and cannot run twice. Emergency cases cannot
+  be approved.
+- **Emergency screening is deterministic.** A regex red-flag list runs before the
+  model. A model flag can also stop the flow, but the rule gate can never be
+  overridden. Negated phrases ("no chest pain") are ignored.
+- **Follow-up escalation is deterministic.** A red flag in a check-in moves the
+  case to `emergency`, marks `needs_attention`, and alerts the clinic if
+  `CONSULT_DOCTOR_EMAIL` is set.
+- **Honest labels.** Every reply records its engine (`vultr / <model>` or
+  `rules (...)`). A fallback is never presented as a model answer.
+- **Synthetic data only.** The prototype is not a medical device and must not be
+  used with real patient records.
 
-The app runs directly on an Ubuntu 24.04 VM (not in a container) so it can own
-SQLite and send mail.
+## Deploy on a dedicated Vultr VM
 
-**One-command update from the developer machine** (needs SSH access + rsync):
+This build is meant to own a VM so it never shares a database or service with
+another project. The provisioning script creates a new Ubuntu 24.04 instance,
+a firewall group, and an SSH key entry through the Vultr API.
 
 ```bash
-./deploy/deploy.sh                    # uses the `vultr` SSH alias
-CONSULT_HOST=root@1.2.3.4 ./deploy/deploy.sh
+# Put a Vultr API key with instance/firewall permissions in ~/.vultr_api_key
+chmod 600 ~/.vultr_api_key
+
+./deploy/provision_and_deploy.sh
 ```
 
-`vultr` is a normal `~/.ssh/config` Host entry (HostName, User, IdentityFile).
-It rsyncs the tree to `/opt/consult`, installs requirements, restarts
-`consult`, and prints `/healthz`. `.env` stays on the server and is never
-copied; `.venv`, `out`, and caches are excluded.
+Defaults: region `sgp`, plan `vc2-1c-2gb`, label `consult-homeopathic`. Override
+with `VULTR_REGION`, `VULTR_PLAN`, or `VULTR_LABEL`. The script:
 
-First-time setup on a fresh VM:
+1. creates a firewall group (22, 80, 443) and the instance;
+2. waits for the public IP;
+3. rsyncs the tree to `/opt/consult-homeopathic`;
+4. writes `/etc/consult-homeopathic/consult.env` from the local `.env` plus the
+   server public URL (never committed);
+5. creates the venv, installs requirements, installs the systemd unit;
+6. configures Caddy HTTPS on `consult-homeopathic.<ip>.sslip.io`;
+7. prints `/healthz`.
+
+Later updates:
 
 ```bash
-sudo adduser --system --group --home /opt/consult consult
-sudo mkdir -p /opt/consult /etc/consult /var/lib/consult
-# copy the repo to /opt/consult, then:
-sudo -u consult python3 -m venv /opt/consult/.venv
-sudo -u consult /opt/consult/.venv/bin/pip install -r /opt/consult/requirements.txt
-sudo install -m 600 /dev/null /etc/consult/consult.env   # add the same vars as .env
-sudo install -m 644 deploy/consult.service /etc/systemd/system/consult.service
-sudo systemctl daemon-reload && sudo systemctl enable --now consult
+CONSULT_HOST=root@<ip> ./deploy/deploy.sh
 ```
 
-Caddy provides HTTPS (`deploy/Caddyfile`). The public URL is the Vultr VM host,
-for example `https://consult.<vm-ip>.sslip.io/`.
+Server layout: code `/opt/consult-homeopathic`, data
+`/var/lib/consult-homeopathic`, env `/etc/consult-homeopathic/consult.env`, unit
+`consult-homeopathic.service`.
 
-## Demo script (about two minutes)
+### Docker alternative
 
-1. Patient: "cough and fever for five days, allergic to penicillin", choose
-   **Online doctor review**.
+```bash
+cp .env.example .env   # fill a provider
+docker compose up -d --build
+```
+
+The image runs as a non-root user and stores SQLite, reports, and emails in the
+`/data` volume.
+
+## Demo flow (about two minutes, no video needed)
+
+1. Patient: "cough and fever for five days, allergic to penicillin", attach a
+   small lab report, choose **Online doctor review**.
 2. Second patient reports chest pain; the agent stops and shows emergency
-   guidance. This is the safety moment.
-3. Doctor dashboard: open the pending case, see the structured summary and the
-   allergy warning, edit the advice, approve.
-4. Open the outbox and show the exact email the patient received.
-5. Close on value: a case prepared in minutes instead of a full appointment slot.
+   guidance.
+3. Doctor dashboard: open the pending case, see the structured summary, lab
+   values, and allergy warning, edit the advice, approve.
+4. Open the outbox and show the exact plan email; the follow-up link is in it.
+5. Send the check-in now and open the public link; submit "chest pain" to show
+   the automatic escalation and the `needs_attention` banner.
+
+To make step 5 instant in a demo, set `FOLLOWUP_DAYS=0`.
 
 ## Submission assets
 
-- `docs/SUBMISSION.md` — title, short/long description, tags, honest limitations
-- `docs/VIDEO_SCRIPT.md` — two-minute shot list with narration
-- `docs/ui.png`, `docs/doctor.png` — current screenshots
+- `docs/SUBMISSION.md` — title, descriptions, tags, limitations
+- `docs/ARCHITECTURE.md` — flow and threat boundaries
+- No video is included by request.
 
 ## What is deliberately out of scope
 
 Real patient data, real payments, video calls, doctor identity verification, and
-automated diagnosis or prescribing.
+automated diagnosis or prescribing. The doctor dashboard is open for judges in
+this demo; production needs authentication, consent, encryption at rest, and
+health-data compliance.
 
 ## Team
 

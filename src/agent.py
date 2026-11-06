@@ -1,18 +1,29 @@
 """The multi-step workflow: intake -> safety gate -> options -> doctor -> email.
 
 The flow is deliberately split so the AI only does the information work. It can
-ask questions, extract a structured case, and suggest care paths. It cannot set
-the doctor's decision, cannot prescribe, and cannot override the emergency gate.
+ask questions, extract a structured case, read an uploaded report, and suggest
+care paths. It cannot set the doctor's decision, prescribe, or override the
+emergency gate.
 """
 from __future__ import annotations
 
 import re
+import secrets
+from datetime import datetime, timedelta, timezone
 
 import case_model
+import config
 import emailer
+import text as copy
 import inference
+import reports
 import safety
 import store
+
+
+class WorkflowError(ValueError):
+    """A request that is valid HTTP but invalid for the case state."""
+
 
 SYSTEM_PROMPT = """You are the intake assistant for a clinic prototype. You gather
 information; a licensed doctor makes every medical decision. Never diagnose, never
@@ -20,7 +31,7 @@ prescribe, never give a treatment dose. Be warm, brief, and plain-spoken.
 
 Return ONLY a JSON object with exactly these keys:
 {
-  "reply": "what to say to the patient next (max 70 words)",
+  "reply": "what to say to the patient next (max 70 words, English)",
   "emergency": false,
   "red_flags": ["..."],
   "patient": {"name": "", "email": "", "age": null, "sex": "",
@@ -29,13 +40,14 @@ Return ONLY a JSON object with exactly these keys:
   "symptoms": [],
   "duration_days": null,
   "severity": "mild|moderate|severe|",
-  "care_options": [{"name": "", "why": ""}],
+  "care_options": [{"name": "", "why": "", "key": ""}],
   "summary": {"one_liner": "", "key_findings": [], "safety_notes": []},
   "ready_for_review": false
 }
 
 Rules:
 - Keep every field already present in the case; only fill gaps or correct details.
+- Write every field, including "reply" and the summary, in English.
 - Detect emergency red flags (chest pain, trouble breathing, stroke signs, severe
   bleeding, throat/tongue swelling, self-harm, seizure, severe head injury).
 - Ask at most two short follow-up questions. Collect duration, severity, allergies,
@@ -43,14 +55,9 @@ Rules:
 - When you have a complaint, duration, and severity, return 2-3 care_options and
   set ready_for_review true. Options must be care paths, not diagnoses, e.g.
   "Online doctor review", "In-person visit", "Self-care with monitoring".
+  Use key "online_review", "in_person", or "self_care" when one of those fits.
 - summary.key_findings and safety_notes must be short factual strings.
 """
-
-GREETING = (
-    "Hello, I am the intake assistant for Consult Homeopathic Physicians "
-    "(a prototype). I can collect your symptoms and prepare a case for a doctor, "
-    "but I cannot diagnose or prescribe. What brings you in today?"
-)
 
 DEFAULT_OPTIONS = [
     {"name": "Online doctor review",
@@ -99,11 +106,7 @@ def start_case(name: str = "", email: str = "") -> dict:
     case = case_model.new_case(name)
     if email.strip():
         case["patient"]["email"] = email.strip()[:160]
-    _say(case, GREETING, engine="template")
-    case["transcript"].append({
-        "role": "patient", "at": case_model.now(),
-        "text": f"(new case started by {name or 'a patient'})",
-    })
+    _say(case, copy.GREETING, engine="template")
     _audit(case, "system", "intake_started", "Patient opened a new intake")
     store.save_case(case)
     return case
@@ -160,7 +163,7 @@ def _rule_analyze(text: str, case: dict) -> dict:
         data.get("duration_days") is not None
     has_severity = bool(case.get("severity") or data.get("severity"))
     if has_basics and has_duration and has_severity:
-        data["care_options"] = DEFAULT_OPTIONS
+        data["care_options"] = [dict(o) for o in DEFAULT_OPTIONS]
         data["ready_for_review"] = True
         data["summary"] = {
             "one_liner": (data.get("chief_complaint") or case.get("chief_complaint")
@@ -170,20 +173,9 @@ def _rule_analyze(text: str, case: dict) -> dict:
             "key_findings": [],
             "safety_notes": [],
         }
-        data["reply"] = ("Thank you. I have enough to prepare a case. Here are "
-                         "the care options I suggest; please choose one.")
+        data["reply"] = copy.OPTIONS_READY
     else:
-        missing = []
-        if not has_basics:
-            missing.append("your main symptom")
-        if not has_duration:
-            missing.append("how long it has lasted")
-        if not has_severity:
-            missing.append("how mild or severe it feels")
-        if not (case["patient"].get("email") or data["patient"].get("email")):
-            missing.append("an email address for the plan")
-        data["reply"] = ("Thanks. To prepare the case, could you tell me " +
-                         ", ".join(missing) + "?")
+        data["reply"] = copy.ASK_MORE
         data["ready_for_review"] = False
     return data
 
@@ -199,6 +191,8 @@ def _merge_red_flags(case: dict, flags: list[dict]) -> None:
 
 def handle_message(case: dict, text: str) -> dict:
     """Process one patient turn. Returns {case, reply, emergency, engine}."""
+    if case["status"] in {case_model.STATUS_PENDING, case_model.STATUS_DELIVERED}:
+        raise WorkflowError("This intake is closed; the case is already with a doctor.")
     text = (text or "").strip()[:2000]
     case["transcript"].append({"role": "patient", "at": case_model.now(),
                                "text": text})
@@ -207,21 +201,22 @@ def handle_message(case: dict, text: str) -> dict:
     # 1. Deterministic gate. Runs before the model and cannot be overridden.
     flags = safety.detect_red_flags(text)
     if flags:
+        message = copy.EMERGENCY
         _merge_red_flags(case, flags)
         case["status"] = case_model.STATUS_EMERGENCY
         case["urgency"] = "emergency"
         case["engine"] = "rule gate (deterministic)"
-        _say(case, safety.EMERGENCY_MESSAGE, engine="safety-rules")
+        _say(case, message, engine="safety-rules")
         _audit(case, "safety", "red_flag_halt",
                "Matched: " + ", ".join(f["label"] for f in flags))
         store.save_case(case)
-        return {"case": case, "reply": safety.EMERGENCY_MESSAGE,
+        return {"case": case, "reply": message,
                 "emergency": True, "engine": case["engine"]}
 
     # 2. Model turn, with an explicit offline fallback.
     engine = ""
     data: dict
-    if inference.have_key():
+    if inference.have_key() and not config.demo_mode():
         try:
             user = ("Current case:\n" + _case_brief(case) +
                     "\n\nConversation so far:\n" + _transcript(case) +
@@ -233,7 +228,8 @@ def handle_message(case: dict, text: str) -> dict:
             engine = f"rules (LLM unavailable: {str(exc)[:120]})"
     else:
         data = _rule_analyze(text, case)
-        engine = "rules (no inference key configured)"
+        engine = ("rules (demo mode)" if config.demo_mode()
+                  else "rules (no inference key configured)")
 
     # 3. The model may also raise a red flag; the gate still wins.
     model_flags = []
@@ -242,29 +238,72 @@ def handle_message(case: dict, text: str) -> dict:
         if label:
             model_flags.append({"label": label[:80], "phrase": "model flag"})
     if data.get("emergency") or model_flags:
+        message = copy.EMERGENCY
         _merge_red_flags(case, model_flags or [{"label": "model emergency flag",
                                                "phrase": "model flag"}])
         case["status"] = case_model.STATUS_EMERGENCY
         case["urgency"] = "emergency"
         case["engine"] = engine
-        _say(case, safety.EMERGENCY_MESSAGE, engine=engine)
+        _say(case, message, engine=engine)
         _audit(case, "safety", "red_flag_halt", "Model flagged an emergency")
         store.save_case(case)
-        return {"case": case, "reply": safety.EMERGENCY_MESSAGE,
+        return {"case": case, "reply": message,
                 "emergency": True, "engine": engine}
 
     case_model.merge_analysis(case, data)
     case["engine"] = engine
     reply = (data.get("reply") or "").strip() or \
-        "Thank you. Could you tell me a little more about your symptoms?"
+        copy.ASK_MORE
     _say(case, reply, engine=engine)
 
     if case.get("care_options"):
-        case["summary"] = case["summary"] or case_model.rule_summary(case)
+        case_model.ensure_summary(case)
         _audit(case, "agent", "options_presented",
                "; ".join(o["name"] for o in case["care_options"]))
     store.save_case(case)
     return {"case": case, "reply": reply, "emergency": False, "engine": engine}
+
+
+def attach_report(case_id: str, filename: str, content: bytes,
+                  content_type: str = "") -> dict | None:
+    """Read a patient report and merge the findings into the shared case."""
+    case = store.get_case(case_id)
+    if not case:
+        return None
+    if case["status"] in {case_model.STATUS_EMERGENCY,
+                          case_model.STATUS_DELIVERED}:
+        raise WorkflowError("Reports can only be attached before delivery.")
+
+    text = reports.text_from_bytes(filename, content)
+    parsed = reports.parse_with_model(text) or reports.parse_with_rules(text)
+    path = reports.store_file(case_id, filename, content)
+    entry = {
+        "filename": reports.safe_name(filename),
+        "content_type": (content_type or "")[:80],
+        "size": len(content),
+        "uploaded_at": case_model.now(),
+        "summary": parsed["summary"],
+        "findings": parsed["findings"],
+        "path": path,
+    }
+    case.setdefault("reports", []).append(entry)
+    case_model.ensure_summary(case)
+    findings = case["summary"].setdefault("key_findings", [])
+    line = f"Lab report {entry['filename']}: {parsed['summary']}"
+    if line not in findings:
+        findings.append(line[:400])
+    abnormal = [f for f in parsed["findings"] if f.get("flag")]
+    if abnormal:
+        case["summary"].setdefault("safety_notes", []).append(
+            "Abnormal lab values: " + ", ".join(
+                f"{f['test']} {f['value']} ({f['flag']})" for f in abnormal)[:400])
+    _audit(case, "patient", "report_uploaded",
+           f"{entry['filename']} ({entry['size']} bytes, "
+           f"{len(parsed['findings'])} findings)")
+    _say(case, f"Report received: {entry['filename']}. "
+               f"{parsed['summary']}", engine="report-reader")
+    store.save_case(case)
+    return case
 
 
 def choose_option(case_id: str, option: str) -> dict | None:
@@ -272,20 +311,44 @@ def choose_option(case_id: str, option: str) -> dict | None:
     if not case:
         return None
     if case["status"] == case_model.STATUS_EMERGENCY:
-        return case
+        raise WorkflowError("This case was stopped by the emergency gate.")
+    if case["status"] == case_model.STATUS_DELIVERED:
+        raise WorkflowError("This case has already been delivered.")
+    if case["status"] == case_model.STATUS_PENDING:
+        if not option or option == case.get("selected_option"):
+            return case
+        raise WorkflowError("A care option is already being reviewed.")
     names = [o["name"] for o in case.get("care_options", [])]
+    if not names:
+        raise WorkflowError("No care options are available for this case yet.")
     if option not in names:
-        option = names[0] if names else option
+        option = names[0]
     case["selected_option"] = option
     case_model.ensure_summary(case)
     case["status"] = case_model.STATUS_PENDING
-    _say(case, f"You chose: {option}. I have sent the structured case to the "
-               "doctor dashboard. A clinician will review it before anything "
-               "reaches you.", engine="template")
+    _say(case, copy.fill(copy.CHOSEN, option=option), engine="template")
     _audit(case, "patient", "option_chosen", option)
     _audit(case, "agent", "case_ready_for_review", case["summary"]["one_liner"])
     store.save_case(case)
     return case
+
+
+def _schedule_follow_up(case: dict) -> None:
+    days = 2.0
+    try:
+        days = max(0.0, float(config.env("FOLLOWUP_DAYS", "2")))
+    except ValueError:
+        pass
+    due = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(days=days)
+    token = secrets.token_urlsafe(24)
+    case["follow_up"] = {
+        "due_at": due.isoformat(),
+        "token": token,
+        "sent_at": "",
+        "reports": case.get("follow_up", {}).get("reports", []),
+    }
+    store.schedule_followup(case["case_id"], token, case["follow_up"]["due_at"],
+                            case_model.now())
 
 
 def approve(case_id: str, *, advice: str, prescription: str = "",
@@ -293,17 +356,28 @@ def approve(case_id: str, *, advice: str, prescription: str = "",
     case = store.get_case(case_id)
     if not case:
         return None
+    if case["status"] == case_model.STATUS_EMERGENCY:
+        raise WorkflowError("An emergency case cannot be approved here.")
+    if case["status"] == case_model.STATUS_DELIVERED:
+        raise WorkflowError("This case has already been approved and delivered.")
+    if case["status"] != case_model.STATUS_PENDING:
+        raise WorkflowError("The patient must choose a care option first.")
+    if not (advice or "").strip():
+        raise WorkflowError("Advice is required before approval.")
+
     case_model.ensure_summary(case)
     case["doctor"] = {
         "notes": (notes or "").strip()[:2000],
-        "advice": (advice or "").strip()[:4000],
+        "advice": advice.strip()[:4000],
         "prescription": (prescription or "").strip()[:2000],
         "approved_by": (doctor or "Doctor").strip()[:120],
         "approved_at": case_model.now(),
     }
     case["status"] = case_model.STATUS_DELIVERED
+    _schedule_follow_up(case)
     _audit(case, "doctor", "case_approved",
            f"Approved by {case['doctor']['approved_by']}")
+    _audit(case, "agent", "followup_scheduled", case["follow_up"]["due_at"])
     delivered = emailer.send(case)
     case["email"] = {"to": delivered["to"], "subject": delivered["subject"],
                      "mode": delivered["mode"], "sent_at": case_model.now()}
@@ -321,27 +395,45 @@ def follow_up(case_id: str, report: str) -> dict | None:
     case = store.get_case(case_id)
     if not case:
         return None
+    report = (report or "").strip()[:2000]
+    if not report:
+        raise WorkflowError("A follow-up report is required.")
     flags = safety.detect_red_flags(report)
     _audit(case, "patient", "follow_up_report", report[:300])
+    entry = {"at": case_model.now(), "text": report,
+             "red_flags": [f["label"] for f in flags]}
+    case.setdefault("follow_up", {}).setdefault("reports", []).append(entry)
     if flags:
         case["status"] = case_model.STATUS_EMERGENCY
         case["urgency"] = "emergency"
-        _say(case, safety.EMERGENCY_MESSAGE, engine="safety-rules")
+        case["needs_attention"] = True
+        _say(case, copy.EMERGENCY, engine="safety-rules")
         _audit(case, "safety", "follow_up_escalated",
                "Matched: " + ", ".join(f["label"] for f in flags))
+        try:
+            emailer.send_alert(case, "Follow-up red flags: " +
+                               ", ".join(f["label"] for f in flags))
+        except OSError:
+            _audit(case, "system", "alert_failed", "SMTP delivery failed")
     else:
-        _say(case, "Thank you for the update. The clinic has been notified; "
-                   "a clinician will contact you if needed.", engine="template")
+        _say(case, copy.FOLLOWUP_ACK, engine="template")
         _audit(case, "agent", "follow_up_logged", "No emergency flag in report")
     store.save_case(case)
     return case
+
+
+def follow_up_by_token(token: str, report: str) -> dict | None:
+    row = store.get_followup_by_token(token)
+    if not row:
+        return None
+    return follow_up(row["case_id"], report)
 
 
 def _case_brief(case: dict) -> str:
     import json
     brief = {key: case.get(key) for key in
              ("patient", "chief_complaint", "symptoms", "duration_days",
-              "severity", "red_flags")}
+              "severity", "red_flags", "reports")}
     return json.dumps(brief, ensure_ascii=False)
 
 

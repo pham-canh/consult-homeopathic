@@ -1,0 +1,27 @@
+[Unit]
+Description=Consult Homeopathic Physicians (FastAPI, doctor-in-the-loop)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=consult
+Group=consult
+WorkingDirectory=/opt/consult-homeopathic
+EnvironmentFile=/etc/consult-homeopathic/consult.env
+Environment=PORT=8000
+Environment=CONSULT_DATA_DIR=/var/lib/consult-homeopathic
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/consult-homeopathic/.venv/bin/python /opt/consult-homeopathic/app.py
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=20
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/lib/consult-homeopathic
+
+[Install]
+WantedBy=multi-user.target

@@ -11,6 +11,7 @@ import re
 import uuid
 from datetime import datetime, timezone
 
+
 STATUS_INTAKE = "intake"
 STATUS_EMERGENCY = "emergency"
 STATUS_PENDING = "pending_review"
@@ -48,6 +49,9 @@ def new_case(patient_name: str = "") -> dict:
         "urgency": "",
         "care_options": [],
         "selected_option": "",
+        "reports": [],
+        "follow_up": {"due_at": "", "token": "", "sent_at": "", "reports": []},
+        "needs_attention": False,
         "summary": {"one_liner": "", "key_findings": [], "safety_notes": []},
         "doctor": {"notes": "", "advice": "", "prescription": "",
                    "approved_by": "", "approved_at": ""},
@@ -190,20 +194,44 @@ def ensure_summary(case: dict) -> None:
         case["summary"] = rule_summary(case)
 
 
-# A tiny, explicit cross-reactivity list. This is a prototype warning, not a
-# clinical interaction database: it only catches the obvious penicillin family.
+# Explicit cross-reactivity families. This is a prototype warning, not a
+# clinical interaction database; it catches the obvious families only.
 CROSS_REACTIVITY = {
     "penicillin": ["penicillin", "amoxicillin", "ampicillin", "augmentin",
-                   "co-amoxiclav", "piperacillin"],
-    "sulfa": ["sulfa", "sulfamethoxazole", "trimethoprim", "bactrim"],
+                   "co-amoxiclav", "piperacillin", "flucloxacillin"],
+    "sulfa": ["sulfa", "sulfamethoxazole", "trimethoprim", "bactrim",
+              "co-trimoxazole"],
     "aspirin": ["aspirin", "acetylsalicylic"],
+    "nsaid": ["ibuprofen", "naproxen", "diclofenac", "celecoxib", "nsaid"],
+    "codeine": ["codeine", "tramadol"],
+    "latex": ["latex"],
+    "iodine": ["iodine", "contrast"],
 }
+
+# A short list of common, clinically important medication conflicts. It is
+# deliberately small and visible so a judge can audit it.
+INTERACTIONS = [
+    ("warfarin", ["aspirin", "ibuprofen", "naproxen", "diclofenac"],
+     "bleeding risk with warfarin"),
+    ("warfarin", ["amoxicillin", "fluconazole", "metronidazole"],
+     "INR may rise with warfarin"),
+    ("metformin", ["contrast", "iodine"], "hold metformin around contrast"),
+    ("ssri", ["tramadol", "triptan"], "serotonin syndrome risk"),
+    ("maoi", ["tyramine", "tramadol", "ssri"],
+     "hypertensive crisis / serotonin risk"),
+    ("methotrexate", ["ibuprofen", "aspirin", "naproxen"],
+     "methotrexate toxicity risk"),
+]
+
+
+def _text(case: dict) -> str:
+    return (case.get("doctor", {}).get("prescription", "") + " " +
+            case.get("doctor", {}).get("advice", "")).lower()
 
 
 def allergy_warnings(case: dict) -> list[str]:
     """Flag a proposed prescription that mentions a recorded allergy."""
-    text = (case.get("doctor", {}).get("prescription", "") + " " +
-            case.get("doctor", {}).get("advice", "")).lower()
+    text = _text(case)
     warnings = []
     for allergy in case["patient"].get("allergies", []):
         token = allergy.lower().strip()
@@ -214,3 +242,20 @@ def allergy_warnings(case: dict) -> list[str]:
             warnings.append(f"Prescription may conflict with a recorded "
                             f"allergy: {allergy}")
     return warnings
+
+
+def interaction_warnings(case: dict) -> list[str]:
+    """Flag a proposed drug against the patient's recorded medications."""
+    text = _text(case)
+    meds = " ".join(case["patient"].get("medications", [])).lower()
+    warnings = []
+    for current, proposed, note in INTERACTIONS:
+        if current in meds and any(name in text for name in proposed):
+            warnings.append(f"Possible drug interaction ({note}): "
+                            f"patient records {current}.")
+    return warnings
+
+
+def safety_warnings(case: dict) -> list[str]:
+    return allergy_warnings(case) + interaction_warnings(case)
+

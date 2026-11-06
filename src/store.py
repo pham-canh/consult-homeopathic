@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 
 from config import db_path
@@ -31,6 +32,13 @@ CREATE TABLE IF NOT EXISTS emails (
     subject  TEXT NOT NULL,
     mode     TEXT NOT NULL,
     path     TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS followups (
+    case_id   TEXT PRIMARY KEY,
+    token     TEXT UNIQUE NOT NULL,
+    due_at    TEXT NOT NULL,
+    sent_at   TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL
 );
 """
 
@@ -113,6 +121,74 @@ def list_emails(limit: int = 50) -> list[dict]:
             "SELECT case_id, at, to_addr, subject, mode, path FROM emails "
             "ORDER BY id DESC LIMIT ?", (int(limit),)).fetchall()
     return [dict(row) for row in rows]
+
+
+def schedule_followup(case_id: str, token: str, due_at: str, created_at: str) -> None:
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO followups (case_id, token, due_at, sent_at, created_at) "
+            "VALUES (?, ?, ?, '', ?) "
+            "ON CONFLICT(case_id) DO UPDATE SET token=excluded.token, "
+            "due_at=excluded.due_at, sent_at='' ",
+            (case_id, token, due_at, created_at),
+        )
+
+
+def due_followups(now: str, limit: int = 25) -> list[dict]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT case_id, token, due_at FROM followups "
+            "WHERE sent_at = '' AND due_at <= ? "
+            "ORDER BY due_at ASC LIMIT ?", (now, int(limit))).fetchall()
+    return [dict(row) for row in rows]
+
+
+def claim_followup(case_id: str, sent_at: str) -> bool:
+    """Atomically mark a check-in as sent so two workers cannot double-send."""
+    with _connect() as conn:
+        cur = conn.execute(
+            "UPDATE followups SET sent_at = ? WHERE case_id = ? AND sent_at = ''",
+            (sent_at, case_id),
+        )
+        return cur.rowcount > 0
+
+
+def clear_followup_sent(case_id: str) -> None:
+    with _connect() as conn:
+        conn.execute("UPDATE followups SET sent_at = '' WHERE case_id = ?",
+                     (case_id,))
+
+
+def get_followup_by_token(token: str) -> dict | None:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT case_id, token, due_at, sent_at FROM followups WHERE token = ?",
+            (token,)).fetchone()
+    return dict(row) if row else None
+
+
+def get_followup(case_id: str) -> dict | None:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT case_id, token, due_at, sent_at FROM followups WHERE case_id = ?",
+            (case_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def health() -> dict:
+    path = Path(db_path())
+    with _connect() as conn:
+        conn.execute("SELECT 1").fetchone()
+        cases = conn.execute("SELECT COUNT(*) AS n FROM cases").fetchone()["n"]
+        pending = conn.execute(
+            "SELECT COUNT(*) AS n FROM cases WHERE status = 'pending_review'"
+        ).fetchone()["n"]
+        now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+        due = conn.execute(
+            "SELECT COUNT(*) AS n FROM followups WHERE sent_at = '' "
+            "AND due_at <= ?", (now,)).fetchone()["n"]
+    return {"database": str(path), "cases": cases, "pending_review": pending,
+            "followups_due": due}
 
 
 def reset_db() -> None:
