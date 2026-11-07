@@ -19,6 +19,14 @@ STATUS_DELIVERED = "delivered"
 
 SEVERITIES = {"mild", "moderate", "severe"}
 
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$")
+SAFETY_NOTE = ("Prototype only: AI does not diagnose or prescribe. "
+               "A licensed clinician must review and approve every plan.")
+
+
+def is_email(value: str) -> bool:
+    return bool(EMAIL_RE.fullmatch((value or "").strip()))
+
 
 def now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
@@ -100,6 +108,8 @@ def merge_analysis(case: dict, data: dict) -> dict:
         value = _as_str(incoming.get(key))
         if key == "email":
             value = value.rstrip(".,;:")
+            if value and not is_email(value):
+                continue
         if value:
             patient[key] = value
     age = _as_int(incoming.get("age"))
@@ -133,8 +143,13 @@ def merge_analysis(case: dict, data: dict) -> dict:
     if severity in SEVERITIES:
         case["severity"] = severity
 
+    raw_options = data.get("care_options")
+    if isinstance(raw_options, (str, dict)):
+        raw_options = [raw_options]
+    elif not isinstance(raw_options, (list, tuple)):
+        raw_options = []
     options = []
-    for item in data.get("care_options") or []:
+    for item in raw_options:
         if isinstance(item, dict):
             name = _as_str(item.get("name"), 120)
             why = _as_str(item.get("why"), 300)
@@ -147,11 +162,19 @@ def merge_analysis(case: dict, data: dict) -> dict:
 
     summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
     if summary:
-        case["summary"]["one_liner"] = _as_str(summary.get("one_liner"), 300)
+        one_liner = _as_str(summary.get("one_liner"), 300)
+        if one_liner:
+            case["summary"]["one_liner"] = one_liner
         for key in ("key_findings", "safety_notes"):
             values = _as_list(summary.get(key), 8)
             if values:
-                case["summary"][key] = values
+                merged = list(case["summary"].get(key, []))
+                for value in values:
+                    if value not in merged:
+                        merged.append(value)
+                # Never drop deterministic findings (for example lab values)
+                # just because the model returned a shorter summary.
+                case["summary"][key] = merged[-16:]
     return case
 
 
@@ -184,14 +207,16 @@ def rule_summary(case: dict) -> dict:
         notes.append("Red flags recorded: " + ", ".join(
             f.get("label", "") if isinstance(f, dict) else str(f)
             for f in case["red_flags"]))
-    notes.append("Prototype only: AI does not diagnose or prescribe. "
-                 "A licensed clinician must review and approve every plan.")
+    notes.append(SAFETY_NOTE)
     return {"one_liner": one_liner, "key_findings": findings, "safety_notes": notes}
 
 
 def ensure_summary(case: dict) -> None:
     if not case["summary"].get("one_liner"):
         case["summary"] = rule_summary(case)
+    notes = case["summary"].setdefault("safety_notes", [])
+    if SAFETY_NOTE not in notes:
+        notes.append(SAFETY_NOTE)
 
 
 # Explicit cross-reactivity families. This is a prototype warning, not a
@@ -225,8 +250,9 @@ INTERACTIONS = [
 
 
 def _text(case: dict) -> str:
-    return (case.get("doctor", {}).get("prescription", "") + " " +
-            case.get("doctor", {}).get("advice", "")).lower()
+    # Warnings apply to the proposed prescription, not to advice text such as
+    # "avoid penicillin because of the recorded allergy".
+    return (case.get("doctor", {}).get("prescription", "") or "").lower()
 
 
 def allergy_warnings(case: dict) -> list[str]:

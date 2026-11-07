@@ -180,7 +180,33 @@ def parse_with_model(text: str) -> dict | None:
             "reference": str(item.get("reference") or "").strip()[:40],
             "flag": flag if flag in {"high", "low"} else "",
         })
-    if not findings:
-        return None
     summary = str(data.get("summary") or "").strip()[:400]
+    if not findings and not summary:
+        return None
     return {"summary": summary or "Lab report read.", "findings": findings[:30]}
+
+
+def parse_report(text: str) -> dict:
+    """Deterministic parsing first; the model may add clarity, never remove data.
+
+    The rule parser remains authoritative for every test it recognized, including
+    abnormal flags. Model-only findings are appended for tests the rules missed.
+    """
+    rules = parse_with_rules(text)
+    model = parse_with_model(text)
+    if not model:
+        return rules
+
+    findings = list(rules["findings"])
+    known = {item["test"].casefold() for item in findings}
+    for item in model.get("findings", []):
+        key = item["test"].casefold()
+        if key not in known:
+            findings.append(item)
+            known.add(key)
+
+    summary = (model.get("summary") or "").strip()
+    if summary:
+        summary = f"{summary} Deterministic check: {rules['summary']}"
+    return {"summary": summary[:600] or rules["summary"],
+            "findings": findings[:30]}

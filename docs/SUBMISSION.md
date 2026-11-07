@@ -40,22 +40,24 @@ reports a red flag on the public check-in link, the case escalates and the clini
 is alerted.
 
 Safety is structural, not a prompt: a regex red-flag list runs before every model
-call and cannot be overridden; the approval endpoint is the only path that sends
-email and is single-use; prescriptions are entered by the doctor; every action is
-written to an audit trail. The app is a prototype with synthetic data and is not
-a medical device.
+call and cannot be overridden; a reply guard blocks explicit dosing instructions;
+the approval endpoint is the only path that sends email and is single-use;
+prescriptions are entered by the doctor; every action is written to an audit
+trail. The app is a prototype with synthetic data and is not a medical device.
 
 Vultr is the central backend. A dedicated Vultr Cloud Compute VM runs the FastAPI
-app, SQLite store, dashboard, report storage, and email pipeline. Model calls go
-through Vultr Serverless Inference (OpenAI-compatible), with an offline rule
-fallback that is always labelled. The VM, firewall group, and SSH key are created
-by `deploy/vultr_provision.py`; this deployment does not share a server or
-service with the Blast Radius Zero entry.
+app, SQLite store, dashboard, report storage, and email pipeline. The submitted
+demo calls Vultr Serverless Inference (OpenAI-compatible), with an offline rule
+fallback that is always labelled. No model ID is hard-coded: the same build also
+supports OpenAI, Anthropic, Gemini, and any OpenAI-compatible endpoint, so the
+team can supply its own key and model. The VM, firewall group, and SSH key are
+created by `deploy/vultr_provision.py`.
 
 ## Built with
 
 Python, FastAPI, SQLite, vanilla HTML/CSS/JS, Vultr Cloud Compute,
-Vultr Serverless Inference, Caddy, systemd, Docker (optional).
+Vultr Serverless Inference (plus OpenAI, Anthropic, Gemini, and
+OpenAI-compatible endpoints), Caddy, systemd, Docker (optional).
 
 ## Links
 
@@ -63,7 +65,7 @@ Vultr Serverless Inference, Caddy, systemd, Docker (optional).
 - Doctor dashboard: https://consult-homeopathic.207.148.72.102.sslip.io/doctor
 - Health: https://consult-homeopathic.207.148.72.102.sslip.io/healthz
 - Source: this repository
-- No video is submitted with this build, by request.
+- This is a code-only submission; no video is included.
 
 ## Tags
 
@@ -84,8 +86,9 @@ authentication and consent management.
 - Email delivery (real SMTP when configured; otherwise a labelled `.eml` outbox)
 - Follow-up scheduling, public token check-in, automatic escalation
 - Audit trail and health reporting
-- 46 automated tests, Dockerfile, systemd unit, Caddy config, Vultr provisioner
-- Dedicated Vultr VM deployment, separate from Blast Radius Zero
+- Provider-agnostic inference with a hidden-prompt CLI for team keys
+- 70 automated tests, Dockerfile, systemd unit, Caddy config, Vultr provisioner
+- Dedicated Vultr VM deployment
 
 ## Honest limitations
 

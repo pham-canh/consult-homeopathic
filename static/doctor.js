@@ -12,7 +12,12 @@ async function api(path, options = {}) {
     headers: { "Content-Type": "application/json" }, ...options,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+  if (!res.ok) {
+    const detail = Array.isArray(data.detail)
+      ? data.detail.map((item) => item.msg || String(item)).join("; ")
+      : data.detail;
+    throw new Error(detail || `HTTP ${res.status}`);
+  }
   return data;
 }
 
@@ -293,7 +298,7 @@ async function loadMailbox() {
       return;
     }
     box.innerHTML = data.emails.map((m) => `
-      <button class="mail" data-id="${escapeHtml(m.case_id)}"
+      <button class="mail" data-id="${escapeHtml(m.id)}"
               style="text-align:left;cursor:pointer">
         <b>${escapeHtml(m.subject)}</b>
         <div class="small muted">${escapeHtml(m.at)} · ${escapeHtml(m.mode)} · to ${escapeHtml(m.to_addr)}</div>
@@ -304,9 +309,9 @@ async function loadMailbox() {
   } catch { /* mailbox is optional */ }
 }
 
-async function showEmail(caseId) {
+async function showEmail(emailId) {
   try {
-    const data = await api(`/api/mailbox/${caseId}`);
+    const data = await api(`/api/emails/${emailId}`);
     const pre = $("email-preview");
     pre.textContent = data.content;
     pre.classList.remove("hidden");

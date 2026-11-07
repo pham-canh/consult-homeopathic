@@ -18,6 +18,7 @@ an offline path use the deterministic rule engine explicitly.
 from __future__ import annotations
 
 import json
+import re
 import urllib.error
 import urllib.request
 
@@ -56,6 +57,10 @@ ALIASES = {
     "google": "gemini",
     "custom": "openai-compatible",
     "compatible": "openai-compatible",
+    "openai_compatible": "openai-compatible",
+    "openrouter": "openai-compatible",
+    "ollama": "openai-compatible",
+    "vllm": "openai-compatible",
 }
 
 ANTHROPIC_VERSION = "2023-06-01"
@@ -79,13 +84,28 @@ def normalize_provider(name: str) -> str:
     return name if name in PROVIDER_ORDER else ""
 
 
+def known_bases() -> set[str]:
+    return {url.rstrip("/") for url in DEFAULT_BASE.values() if url}
+
+
+def custom_base() -> str:
+    value = env("INFERENCE_BASE_URL").rstrip("/")
+    return value if value and value not in known_bases() else ""
+
+
 def provider() -> str:
     explicit = normalize_provider(env("INFERENCE_PROVIDER"))
     if explicit:
         return explicit
-    for name in PROVIDER_ORDER:
+    if _first(["VULTR_API_KEY"]):
+        return "vultr"
+    for name in ("openai", "anthropic", "gemini"):
         if _first(KEY_ENVS[name]):
             return name
+    if _first(["INFERENCE_API_KEY"]):
+        # A generic key with a custom base URL means an OpenAI-compatible
+        # endpoint; without a custom URL it is treated as the Vultr key.
+        return "openai-compatible" if custom_base() else "vultr"
     return "vultr"
 
 
@@ -136,13 +156,13 @@ def configured_providers() -> list[dict]:
     """Providers that actually have a usable key (and a base URL if custom)."""
     out = []
     for name in PROVIDER_ORDER:
-        has_key = bool(_first(KEY_ENVS[name]))
-        if name == "openai-compatible":
-            custom = env("INFERENCE_BASE_URL").rstrip("/")
-            known = {url.rstrip("/") for url in DEFAULT_BASE.values() if url}
-            # A key plus a known provider URL is just that provider, not a
-            # separate compatible slot.
-            has_key = has_key and bool(custom) and custom not in known
+        if name == "vultr":
+            has_key = bool(_first(["VULTR_API_KEY"])) or (
+                bool(_first(["INFERENCE_API_KEY"])) and not custom_base())
+        elif name == "openai-compatible":
+            has_key = bool(_first(["INFERENCE_API_KEY"])) and bool(custom_base())
+        else:
+            has_key = bool(_first(KEY_ENVS[name]))
         if not has_key:
             continue
         out.append({"provider": name, "key": True,
@@ -214,10 +234,18 @@ def chat(messages: list[dict], *, temperature: float = 0.2,
     model = _require_model()
     api_key = _key()
     if prov in {"vultr", "openai", "openai-compatible"}:
-        data = _request(
-            base_url() + "/chat/completions",
-            _openai_payload(messages, model, temperature),
-            {"Authorization": f"Bearer {api_key}"}, timeout)
+        payload = _openai_payload(messages, model, temperature)
+        try:
+            data = _request(base_url() + "/chat/completions", payload,
+                            {"Authorization": f"Bearer {api_key}"}, timeout)
+        except InferenceError as exc:
+            # Newer OpenAI reasoning models reject `temperature`; retry once
+            # without it so a valid key/model is not reported as broken.
+            if "temperature" not in str(exc).lower():
+                raise
+            payload.pop("temperature", None)
+            data = _request(base_url() + "/chat/completions", payload,
+                            {"Authorization": f"Bearer {api_key}"}, timeout)
         try:
             return data["choices"][0]["message"]["content"] or ""
         except (KeyError, IndexError, TypeError) as exc:
@@ -238,9 +266,11 @@ def chat(messages: list[dict], *, temperature: float = 0.2,
                 f"Unexpected response: {json.dumps(data)[:300]}") from exc
 
     if prov == "gemini":
+        model = model.removeprefix("models/")
         data = _request(
-            f"{base_url()}/models/{model}:generateContent?key={api_key}",
-            _gemini_payload(messages, temperature), {}, timeout)
+            f"{base_url()}/models/{model}:generateContent",
+            _gemini_payload(messages, temperature),
+            {"x-goog-api-key": api_key}, timeout)
         try:
             parts = data["candidates"][0]["content"]["parts"]
             return "".join(part.get("text", "") for part in parts)
@@ -255,11 +285,9 @@ def _extract_json(raw: str) -> dict:
     """Parse a JSON object from a model reply, tolerating fences or leading prose."""
     text = raw.strip()
     if "```" in text:
-        for chunk in text.split("```"):
-            body = chunk.split("\n", 1)
-            if len(body) == 2:
-                text = body[1].strip()
-                break
+        fenced = re.search(r"```(?:json)?\s*(.*?)```", text, re.DOTALL | re.IGNORECASE)
+        if fenced:
+            text = fenced.group(1).strip()
     start, end = text.find("{"), text.rfind("}")
     if start == -1 or end <= start:
         raise InferenceError(f"model did not return JSON: {raw[:200]}")

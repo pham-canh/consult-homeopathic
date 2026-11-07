@@ -101,6 +101,44 @@ def _say(case: dict, text: str, *, engine: str | None = None) -> dict:
     return entry
 
 
+TRUE_VALUES = {"1", "true", "yes", "y", "emergency", "urgent"}
+
+
+def _truthy(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        return value.strip().lower() in TRUE_VALUES
+    return False
+
+
+def _reply_text(value) -> str:
+    return value.strip()[:1200] if isinstance(value, str) else ""
+
+
+def _flag_labels(value) -> list[dict]:
+    """Normalize model red flags without turning a string into characters."""
+    if isinstance(value, dict):
+        items = [value]
+    elif isinstance(value, str):
+        text = value.strip()
+        if not text or text.lower() in {"none", "no", "false", "n/a"}:
+            return []
+        items = [text]
+    elif isinstance(value, (list, tuple)):
+        items = list(value)
+    else:
+        return []
+    flags = []
+    for item in items:
+        label = item.get("label") if isinstance(item, dict) else item
+        if isinstance(label, str) and label.strip():
+            flags.append({"label": label.strip()[:80], "phrase": "model flag"})
+    return flags[:12]
+
+
 def start_case(name: str = "", email: str = "") -> dict:
     store.init_db()
     case = case_model.new_case(name)
@@ -225,19 +263,16 @@ def handle_message(case: dict, text: str) -> dict:
             engine = inference.engine_label()
         except inference.InferenceError as exc:
             data = _rule_analyze(text, case)
-            engine = f"rules (LLM unavailable: {str(exc)[:120]})"
+            engine = "rules (LLM unavailable)"
+            _audit(case, "system", "inference_fallback", str(exc)[:300])
     else:
         data = _rule_analyze(text, case)
         engine = ("rules (demo mode)" if config.demo_mode()
                   else "rules (no inference key configured)")
 
     # 3. The model may also raise a red flag; the gate still wins.
-    model_flags = []
-    for item in data.get("red_flags") or []:
-        label = item.get("label") if isinstance(item, dict) else str(item)
-        if label:
-            model_flags.append({"label": label[:80], "phrase": "model flag"})
-    if data.get("emergency") or model_flags:
+    model_flags = _flag_labels(data.get("red_flags"))
+    if _truthy(data.get("emergency")) or model_flags:
         message = copy.EMERGENCY
         _merge_red_flags(case, model_flags or [{"label": "model emergency flag",
                                                "phrase": "model flag"}])
@@ -252,8 +287,11 @@ def handle_message(case: dict, text: str) -> dict:
 
     case_model.merge_analysis(case, data)
     case["engine"] = engine
-    reply = (data.get("reply") or "").strip() or \
-        copy.ASK_MORE
+    reply = _reply_text(data.get("reply")) or copy.ASK_MORE
+    reply, guarded = safety.guard_reply(reply)
+    if guarded:
+        _audit(case, "safety", "model_reply_guarded",
+               f"Blocked {guarded} in a model reply")
     _say(case, reply, engine=engine)
 
     if case.get("care_options"):
@@ -275,7 +313,7 @@ def attach_report(case_id: str, filename: str, content: bytes,
         raise WorkflowError("Reports can only be attached before delivery.")
 
     text = reports.text_from_bytes(filename, content)
-    parsed = reports.parse_with_model(text) or reports.parse_with_rules(text)
+    parsed = reports.parse_report(text)
     path = reports.store_file(case_id, filename, content)
     entry = {
         "filename": reports.safe_name(filename),
@@ -322,7 +360,7 @@ def choose_option(case_id: str, option: str) -> dict | None:
     if not names:
         raise WorkflowError("No care options are available for this case yet.")
     if option not in names:
-        option = names[0]
+        raise WorkflowError("That care option is not available for this case.")
     case["selected_option"] = option
     case_model.ensure_summary(case)
     case["status"] = case_model.STATUS_PENDING
@@ -333,7 +371,7 @@ def choose_option(case_id: str, option: str) -> dict | None:
     return case
 
 
-def _schedule_follow_up(case: dict) -> None:
+def _prepare_follow_up(case: dict) -> dict:
     days = 2.0
     try:
         days = max(0.0, float(config.env("FOLLOWUP_DAYS", "2")))
@@ -347,8 +385,7 @@ def _schedule_follow_up(case: dict) -> None:
         "sent_at": "",
         "reports": case.get("follow_up", {}).get("reports", []),
     }
-    store.schedule_followup(case["case_id"], token, case["follow_up"]["due_at"],
-                            case_model.now())
+    return case["follow_up"]
 
 
 def approve(case_id: str, *, advice: str, prescription: str = "",
@@ -373,16 +410,35 @@ def approve(case_id: str, *, advice: str, prescription: str = "",
         "approved_by": (doctor or "Doctor").strip()[:120],
         "approved_at": case_model.now(),
     }
+    previous_reports = list(case.get("follow_up", {}).get("reports", []))
     case["status"] = case_model.STATUS_DELIVERED
-    _schedule_follow_up(case)
+    follow = _prepare_follow_up(case)
+
+    # Send before persisting delivery. If email fails, the case stays pending so
+    # a doctor can retry instead of a half-delivered record appearing complete.
+    try:
+        delivered = emailer.send(case)
+    except Exception as exc:
+        case["status"] = case_model.STATUS_PENDING
+        case["follow_up"] = {"due_at": "", "token": "", "sent_at": "",
+                             "reports": previous_reports}
+        _audit(case, "system", "email_failed",
+               f"{type(exc).__name__}: {str(exc)[:300]}")
+        store.save_case(case)
+        raise WorkflowError(
+            "The plan could not be emailed. The case is still pending; check "
+            "the email settings and try again.") from exc
+
+    stamp = case_model.now()
+    store.schedule_followup(case["case_id"], follow["token"], follow["due_at"],
+                            stamp)
+    case["email"] = {"to": delivered["to"], "subject": delivered["subject"],
+                     "mode": delivered["mode"], "sent_at": stamp}
+    store.save_email(case["case_id"], stamp, delivered["to"],
+                     delivered["subject"], delivered["mode"], delivered["path"])
     _audit(case, "doctor", "case_approved",
            f"Approved by {case['doctor']['approved_by']}")
-    _audit(case, "agent", "followup_scheduled", case["follow_up"]["due_at"])
-    delivered = emailer.send(case)
-    case["email"] = {"to": delivered["to"], "subject": delivered["subject"],
-                     "mode": delivered["mode"], "sent_at": case_model.now()}
-    store.save_email(case["case_id"], case["email"]["sent_at"], delivered["to"],
-                     delivered["subject"], delivered["mode"], delivered["path"])
+    _audit(case, "agent", "followup_scheduled", follow["due_at"])
     _audit(case, "agent", "email_delivered",
            f"mode={delivered['mode']} to={delivered['to']}")
     _say(case, f"The approved plan was sent to {delivered['to']} "
@@ -395,6 +451,11 @@ def follow_up(case_id: str, report: str) -> dict | None:
     case = store.get_case(case_id)
     if not case:
         return None
+    if (case["status"] not in {case_model.STATUS_DELIVERED,
+                               case_model.STATUS_EMERGENCY}
+            or not case.get("doctor", {}).get("approved_at")):
+        raise WorkflowError(
+            "A follow-up is only available after a doctor has delivered a plan.")
     report = (report or "").strip()[:2000]
     if not report:
         raise WorkflowError("A follow-up report is required.")
@@ -433,7 +494,11 @@ def _case_brief(case: dict) -> str:
     import json
     brief = {key: case.get(key) for key in
              ("patient", "chief_complaint", "symptoms", "duration_days",
-              "severity", "red_flags", "reports")}
+              "severity", "red_flags")}
+    brief["reports"] = [
+        {key: value for key, value in report.items() if key != "path"}
+        for report in case.get("reports", [])
+    ]
     return json.dumps(brief, ensure_ascii=False)
 
 

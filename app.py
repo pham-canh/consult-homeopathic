@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile  # noqa: E402
 from fastapi.responses import FileResponse, JSONResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
-from pydantic import BaseModel, Field  # noqa: E402
+from pydantic import BaseModel, Field, field_validator  # noqa: E402
 
 import agent  # noqa: E402
 import case_model  # noqa: E402
@@ -33,7 +33,7 @@ import store  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT / "static"
-VERSION = "2.0.0"
+VERSION = "2.1.0"
 
 
 @asynccontextmanager
@@ -84,13 +84,37 @@ class StartIn(BaseModel):
     name: str = Field(default="", max_length=120)
     email: str = Field(default="", max_length=160)
 
+    @field_validator("email")
+    @classmethod
+    def _email(cls, value: str) -> str:
+        value = value.strip()
+        if value and not case_model.is_email(value):
+            raise ValueError("Enter a valid email address.")
+        return value
+
 
 class MessageIn(BaseModel):
     text: str = Field(min_length=1, max_length=2000)
 
+    @field_validator("text")
+    @classmethod
+    def _text(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Message cannot be empty.")
+        return value
+
 
 class ChooseIn(BaseModel):
     option: str = Field(min_length=1, max_length=120)
+
+    @field_validator("option")
+    @classmethod
+    def _option(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Choose a care option.")
+        return value
 
 
 class ApproveIn(BaseModel):
@@ -208,6 +232,7 @@ async def upload_report(case_id: str, file: UploadFile = File(...)) -> dict:
 
 @app.post("/api/cases/{case_id}/choose")
 def choose(case_id: str, body: ChooseIn) -> dict:
+    _require(case_id)
     case = agent.choose_option(case_id, body.option)
     return {"case": _public_case(case)}
 
@@ -302,6 +327,20 @@ def mailbox_item(case_id: str, kind: str = "") -> dict:
         raise HTTPException(status_code=404, detail="email file is missing")
     return {"case_id": case_id, "content": path.read_text(encoding="utf-8"),
             "email": _require(case_id).get("email", {})}
+
+
+@app.get("/api/emails/{email_id}")
+def email_item(email_id: int) -> dict:
+    row = store.get_email(email_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="email not found")
+    path = Path(row["path"])
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="email file is missing")
+    case = store.get_case(row["case_id"])
+    return {"id": row["id"], "case_id": row["case_id"],
+            "content": path.read_text(encoding="utf-8"),
+            "email": (case or {}).get("email", {})}
 
 
 if __name__ == "__main__":

@@ -13,7 +13,12 @@ async function api(path, options = {}) {
     ...options,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+  if (!res.ok) {
+    const detail = Array.isArray(data.detail)
+      ? data.detail.map((item) => item.msg || String(item)).join("; ")
+      : data.detail;
+    throw new Error(detail || `HTTP ${res.status}`);
+  }
   return data;
 }
 
@@ -53,10 +58,11 @@ function renderOptions(options) {
   });
 }
 
-function showEmergency(text) {
+function showEmergency() {
   finished = true;
   const slot = $("emergency-slot");
-  slot.innerHTML = `<div class="emergency-banner">${escapeHtml(text)}</div>`;
+  slot.innerHTML = `<div class="emergency-banner">Intake stopped for safety.
+    Follow the emergency guidance above now.</div>`;
   $("chat-text").disabled = true;
   $("send-btn").disabled = true;
   $("attach-btn").disabled = true;
@@ -102,7 +108,7 @@ async function send(text) {
     addMessage(data.reply, data.emergency ? "emergency" : "agent", data.engine || "");
     setStatus(data.case);
     if (data.emergency) {
-      showEmergency(data.reply);
+      showEmergency();
       return;
     }
     if (data.case.care_options?.length && data.case.status === "intake") {

@@ -94,8 +94,26 @@ def test_custom_provider_needs_a_base_url(monkeypatch):
     rows = inference.configured_providers()
     assert [row["provider"] for row in rows] == ["vultr"]
     monkeypatch.setenv("INFERENCE_BASE_URL", "http://localhost:11434/v1")
+    assert inference.provider() == "openai-compatible"
     rows = inference.configured_providers()
-    assert [row["provider"] for row in rows] == ["vultr", "openai-compatible"]
+    assert [row["provider"] for row in rows] == ["openai-compatible"]
+
+
+def test_aliases_cover_common_team_wording(monkeypatch):
+    monkeypatch.setenv("INFERENCE_PROVIDER", "claude")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
+    assert inference.provider() == "anthropic"
+    monkeypatch.setenv("INFERENCE_PROVIDER", "chatgpt")
+    monkeypatch.setenv("OPENAI_API_KEY", "k")
+    assert inference.provider() == "openai"
+    monkeypatch.setenv("INFERENCE_PROVIDER", "openrouter")
+    assert inference.provider() == "openai-compatible"
+
+
+def test_extract_json_tolerates_prose_before_a_fence():
+    raw = 'Here is the analysis:\n```json\n{"reply": "hello", "emergency": false}\n```\nDone.'
+    assert inference._extract_json(raw)["reply"] == "hello"
+    assert inference._extract_json('{"reply": "plain"}')["reply"] == "plain"
 
 
 def test_payload_shapes_for_each_api():

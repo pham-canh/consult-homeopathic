@@ -118,9 +118,17 @@ def save_email(case_id: str, at: str, to_addr: str, subject: str,
 def list_emails(limit: int = 50) -> list[dict]:
     with _connect() as conn:
         rows = conn.execute(
-            "SELECT case_id, at, to_addr, subject, mode, path FROM emails "
+            "SELECT id, case_id, at, to_addr, subject, mode, path FROM emails "
             "ORDER BY id DESC LIMIT ?", (int(limit),)).fetchall()
     return [dict(row) for row in rows]
+
+
+def get_email(email_id: int) -> dict | None:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT id, case_id, at, to_addr, subject, mode, path FROM emails "
+            "WHERE id = ?", (int(email_id),)).fetchone()
+    return dict(row) if row else None
 
 
 def schedule_followup(case_id: str, token: str, due_at: str, created_at: str) -> None:

@@ -72,7 +72,10 @@ if ! "${SSH[@]}" "test -x '$DEST/.venv/bin/python'"; then
   "${SSH[@]}" "DOMAIN='$DOMAIN' bash '$DEST/deploy/bootstrap.sh'"
 else
   "${SSH[@]}" "'$DEST/.venv/bin/pip' install -q -r '$DEST/requirements.txt' && \
-    systemctl restart '$SERVICE' && sleep 2 && systemctl is-active '$SERVICE'"
+    install -m 644 '$DEST/deploy/consult-homeopathic.service' \
+      '/etc/systemd/system/$SERVICE.service' && \
+    systemctl daemon-reload && systemctl restart '$SERVICE' && \
+    sleep 2 && systemctl is-active '$SERVICE'"
 fi
 
 echo "Health:"

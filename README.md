@@ -8,9 +8,8 @@ Event: [Vultr: Agent Rush Hackathon](https://lablab.ai/ai-hackathons/vultr-hacka
 Live demo: https://consult-homeopathic.207.148.72.102.sslip.io/
 Challenge: **2 — Powering the Future of Work**
 
-> This is the completed, independently deployed build. It does not share
-> a server, database, service, or deployment with the Blast Radius Zero entry.
-> The previous prototype remains an archive; this tree is the submission build.
+> This is the complete, independently deployed submission build for Challenge 2.
+> The public app, API, and doctor dashboard run on a dedicated Vultr VM.
 
 The agent collects symptoms and history in a short conversation, screens for
 emergency red flags, reads an uploaded lab report, proposes care options, and
@@ -18,7 +17,7 @@ prepares a structured case. A licensed doctor reviews that case on a dashboard,
 edits the plan, and approves it. Only then is the plan emailed to the patient.
 The agent never diagnoses and never prescribes.
 
-The code is complete; there is no demo video in this repository by request.
+This is a code-only submission; no demo video is included.
 
 ## What is in this build
 
@@ -34,6 +33,7 @@ The code is complete; there is no demo video in this repository by request.
 | Follow-up agent | Check-in is scheduled after approval, emailed with a token link, and escalates automatically on a red flag |
 | Safety checks | Allergy cross-reactivity and a short, visible drug-interaction list |
 | Audit trail | Every patient, agent, safety, and doctor action is timestamped |
+| Model providers | No model id bundled; Vultr, OpenAI, Anthropic, Gemini, and any OpenAI-compatible endpoint |
 | Operations | Health check, SQLite persistence, Dockerfile, systemd unit, Caddy HTTPS, Vultr provisioning script |
 
 Core and stretch features from the project overview are therefore present. The
@@ -54,7 +54,7 @@ Doctor review dashboard with the structured case and audit trail:
 
 ```
 Patient browser ─┐
-                 ├─ FastAPI on a dedicated Vultr VM ── Vultr Serverless Inference
+                 ├─ FastAPI on a dedicated Vultr VM ── configured inference provider
 Doctor browser  ─┤        │
 Follow-up link  ─┘        ├── SQLite case store + audit trail + follow-up queue
                           ├── uploaded reports on local disk
@@ -73,12 +73,13 @@ One JSON case record is shared by both flows. Key fields: `case_id`, `patient`
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt -r requirements-dev.txt
-cp .env.example .env      # fill ONE provider
-python3 app.py            # http://127.0.0.1:8000
+cp .env.example .env
+python3 scripts/configure_model.py   # choose a provider, model, and key
+python3 app.py                       # http://127.0.0.1:8000
 ```
 
-No model is fixed. The app uses the first provider with a key, or the one named
-in `INFERENCE_PROVIDER`:
+No model is hard-coded. The app uses the provider named in `INFERENCE_PROVIDER`,
+or the first provider with a key:
 
 | Provider | Key env | Model env | Base URL default |
 |---|---|---|---|
@@ -88,10 +89,40 @@ in `INFERENCE_PROVIDER`:
 | Google / Gemini | `GEMINI_API_KEY` or `GOOGLE_API_KEY` | `GEMINI_MODEL` | `generativelanguage.googleapis.com/v1beta` |
 | Any OpenAI-compatible | `INFERENCE_API_KEY` | `INFERENCE_MODEL` | set `INFERENCE_BASE_URL` |
 
+### Switch provider or model
+
+The team can change providers without touching code. The helper writes only the
+gitignored, mode-600 `.env`; the key is read with a hidden prompt and never
+printed:
+
+```bash
+python3 scripts/configure_model.py
+python3 scripts/configure_model.py --provider claude --model claude-sonnet-4-5
+python3 scripts/configure_model.py --provider openai-compatible \
+  --model my-model --base-url http://localhost:11434/v1
+python3 scripts/configure_model.py --provider gemini --model gemini-2.5-flash --test
+```
+
+Restart the app after saving, then check `/healthz` for the active provider and
+model. The same settings can be edited directly in `.env`; supported aliases
+include `chatgpt`, `claude`, `google`, `openrouter`, and `ollama`.
+
+On the running VM, use the wrapper. It runs the same hidden-input helper against
+`/opt/consult-homeopathic/.env`, restarts the service, and prints `/healthz`:
+
+```bash
+./deploy/configure_model.sh
+```
+
+The systemd unit loads that optional file after the server env file, so the new
+provider takes effect on restart. Changing the local `.env` later does not alter
+the VM env; use the wrapper or edit `/etc/consult-homeopathic/consult.env` and
+restart.
+
 Without a key the app still runs and says so: intake falls back to the
 deterministic rule engine, and `/healthz` reports `llm_key: false`.
 
-Run the tests (no network, no key, 46 tests):
+Run the tests (no network, no key, 70 tests):
 
 ```bash
 CONSULT_FAKE_LLM=1 CONSULT_DISABLE_SCHEDULER=1 python3 -m pytest tests/ -q
@@ -110,11 +141,12 @@ CONSULT_FAKE_LLM=1 CONSULT_DISABLE_SCHEDULER=1 python3 -m pytest tests/ -q
 | POST | `/api/intake/{id}/report` | upload a lab report |
 | POST | `/api/cases/{id}/choose` | choose a care option |
 | GET | `/api/doctor/cases?status=` | review queue |
-| POST | `/api/cases/{id}/approve` | doctor decision, schedule follow-up, email |
+| POST | `/api/cases/{id}/approve` | doctor decision, email plan, schedule follow-up |
 | POST | `/api/cases/{id}/follow-up` | log a follow-up report |
 | POST | `/api/cases/{id}/follow-up/send` | send the scheduled check-in now |
 | GET/POST | `/api/follow-up/{token}` | read/submit the public check-in |
 | GET | `/api/mailbox` | sent-plan and check-in outbox |
+| GET | `/api/emails/{id}` | open one outbox email by id |
 | GET | `/api/cases/{id}` | full case, reports, audit trail, warnings |
 
 Invalid state transitions return `409`; invalid uploads return `400`; unknown
@@ -129,7 +161,8 @@ cases and tokens return `404`.
   be approved.
 - **Emergency screening is deterministic.** A regex red-flag list runs before the
   model. A model flag can also stop the flow, but the rule gate can never be
-  overridden. Negated phrases ("no chest pain") are ignored.
+  overridden. Negated phrases ("no chest pain") are ignored unless a contrast
+  reintroduces a symptom ("no fever but chest pain").
 - **Follow-up escalation is deterministic.** A red flag in a check-in moves the
   case to `emergency`, marks `needs_attention`, and alerts the clinic if
   `CONSULT_DOCTOR_EMAIL` is set.
@@ -167,6 +200,7 @@ Later updates:
 
 ```bash
 CONSULT_HOST=root@<ip> ./deploy/deploy.sh
+./deploy/configure_model.sh           # change provider/key/model on the VM
 ```
 
 Server layout: code `/opt/consult-homeopathic`, data
@@ -183,7 +217,7 @@ docker compose up -d --build
 The image runs as a non-root user and stores SQLite, reports, and emails in the
 `/data` volume.
 
-## Demo flow (about two minutes, no video needed)
+## Demo flow (about two minutes)
 
 1. Patient: "cough and fever for five days, allergic to penicillin", attach a
    small lab report, choose **Online doctor review**.
@@ -202,7 +236,7 @@ To make step 5 instant in a demo, set `FOLLOWUP_DAYS=0`.
 - `docs/SUBMISSION.md` — title, descriptions, tags, limitations
 - `docs/ARCHITECTURE.md` — flow and threat boundaries
 - `docs/ui.png`, `docs/doctor.png` — intake and dashboard screenshots
-- No video is included by request.
+- This is a code-only submission; no video is included.
 
 ## What is deliberately out of scope
 
@@ -213,8 +247,7 @@ health-data compliance.
 
 ## Team
 
-- Canh Pham — backend, Vultr inference, workflow, deployment
-- Team roles to be confirmed in the hackathon chat
+- Canh Pham — backend, inference integration, workflow, deployment
 
 This is a hackathon prototype. It is not a medical device and does not provide
 medical advice.

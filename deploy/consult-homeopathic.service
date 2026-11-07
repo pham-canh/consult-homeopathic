@@ -9,6 +9,8 @@ User=consult
 Group=consult
 WorkingDirectory=/opt/consult-homeopathic
 EnvironmentFile=/etc/consult-homeopathic/consult.env
+# Optional local override written by scripts/configure_model.py.
+EnvironmentFile=-/opt/consult-homeopathic/.env
 Environment=PORT=8000
 Environment=CONSULT_DATA_DIR=/var/lib/consult-homeopathic
 Environment=PYTHONUNBUFFERED=1

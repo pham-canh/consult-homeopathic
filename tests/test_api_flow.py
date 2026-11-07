@@ -33,7 +33,7 @@ def ready_case(monkeypatch):
 def test_healthz_reports_version_and_scheduler():
     data = client.get("/healthz").json()
     assert data["status"] == "ok"
-    assert data["version"] == "2.0.0"
+    assert data["version"] == "2.1.0"
     assert "followups" in data
     assert data["storage"]["cases"] >= 0
 
@@ -123,3 +123,45 @@ def test_doctor_can_send_checkin_now(monkeypatch):
     mailbox = client.get("/api/mailbox").json()["emails"]
     assert any(email["case_id"] == case_id and "Check-in" in email["subject"]
                for email in mailbox)
+
+
+def test_unknown_case_choose_is_404():
+    response = client.post("/api/cases/C-NOPE/choose", json={"option": "x"})
+    assert response.status_code == 404
+
+
+def test_invalid_care_option_is_409(monkeypatch):
+    case_id = ready_case(monkeypatch)
+    response = client.post(f"/api/cases/{case_id}/choose",
+                           json={"option": "Not a real option"})
+    assert response.status_code == 409
+
+
+def test_invalid_email_and_blank_message_are_422():
+    bad_email = client.post("/api/intake/start",
+                            json={"email": "not-an-email"})
+    assert bad_email.status_code == 422
+
+    case_id, _ = new_case()
+    blank = client.post(f"/api/intake/{case_id}/message",
+                        json={"text": "   "})
+    assert blank.status_code == 422
+
+
+def test_each_outbox_email_can_be_opened_by_id(monkeypatch):
+    case_id = ready_case(monkeypatch)
+    client.post(f"/api/cases/{case_id}/approve",
+                json={"advice": "Rest and fluids."})
+    client.post(f"/api/cases/{case_id}/follow-up/send")
+
+    rows = [row for row in client.get("/api/mailbox").json()["emails"]
+            if row["case_id"] == case_id]
+    assert len({row["id"] for row in rows}) >= 2
+    bodies = []
+    for row in rows:
+        response = client.get(f"/api/emails/{row['id']}")
+        assert response.status_code == 200
+        assert response.json()["case_id"] == case_id
+        bodies.append(response.json()["content"])
+    assert any("Doctor's advice" in body for body in bodies)
+    assert any("check-in" in body.lower() for body in bodies)

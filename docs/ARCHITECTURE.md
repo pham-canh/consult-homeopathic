@@ -25,16 +25,19 @@ duplicate check-in cannot be sent by two workers.
 3. If no rule matches, the model (or the rule engine without a key) extracts a
    structured case and returns care options.
 4. `choose_option` closes intake and moves the case to `pending_review`.
-5. `approve` requires `pending_review`, writes the doctor decision, schedules a
-   follow-up, and only then sends email.
+5. `approve` requires `pending_review`, writes the doctor decision, and sends
+   email before persisting delivery. If sending fails, the case stays pending so
+   a doctor can retry rather than a half-delivered record appearing complete.
 6. The follow-up agent sends the scheduled check-in. A public token link accepts
-   one report; a red flag escalates to `emergency` and sets `needs_attention`.
+   patient updates; a red flag escalates to `emergency` and sets
+   `needs_attention`.
 
 ## Trust boundaries
 
 | Boundary | Rule |
 |---|---|
 | Model → medical decision | The model cannot set approval, prescription, or delivery |
+| Model → patient reply | A deterministic guard blocks explicit dosing or diagnosis statements |
 | Model → red flags | A model flag can stop the flow; it cannot clear a rule flag |
 | Patient → case state | The patient can choose an option, not approve or edit the plan |
 | Doctor → delivery | Approval is the only write path to email, and it is single-use |
@@ -51,11 +54,31 @@ duplicate check-in cannot be sent by two workers.
 Reports are stored under `CONSULT_DATA_DIR/reports/<case_id>/`; the API strips
 the server path from responses.
 
+## Model configuration
+
+The inference layer is provider-agnostic. `INFERENCE_PROVIDER` selects Vultr,
+OpenAI, Anthropic, Gemini, or an OpenAI-compatible endpoint; the matching key and
+model environment variables are read at call time. No model ID is bundled. Keys
+live in `.env` (gitignored, mode 600), the server's `consult.env`, or the
+optional `/opt/consult-homeopathic/.env` loaded by systemd, and are never
+returned by the API. `scripts/configure_model.py` writes a file with a hidden key
+prompt; `deploy/configure_model.sh` runs it on the live VM and restarts the
+service. `/healthz` reports the active provider, model, and configured slots.
+
 ## Failure behaviour
 
 - No inference key: explicit `rules (...)` label, the flow still works.
-- Inference error: fall back to the rule engine and record the reason.
+- Inference error: fall back to the rule engine, label the reply, and record the
+  reason in the audit trail.
+- SMTP error during approval: the case remains `pending_review` and the failure
+  is audited; no follow-up is scheduled until the plan is delivered.
 - SMTP error during a check-in: the sent marker is cleared and the scheduler
   retries; the audit trail keeps the failure visible.
 - Invalid state transition: HTTP 409 with a plain explanation.
 - Storage failure: `/healthz` returns 503 instead of a false `ok`.
+
+## Demo-only boundary
+
+The doctor dashboard and case read APIs are intentionally unauthenticated for
+judges. Production needs authentication, per-role authorization, consent,
+encryption at rest, and health-data compliance; the app uses synthetic data only.

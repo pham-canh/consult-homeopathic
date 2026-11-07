@@ -51,7 +51,12 @@ async function load() {
           body: JSON.stringify({ report: text }),
         });
         const body = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(body.detail || "send failed");
+        if (!response.ok) {
+          const detail = Array.isArray(body.detail)
+            ? body.detail.map((item) => item.msg || String(item)).join("; ")
+            : body.detail;
+          throw new Error(detail || "send failed");
+        }
         const status = body.follow_up.status;
         $("result").textContent = status === "emergency" ? COPY.escalated : COPY.sent;
         $("result").className = status === "emergency" ? "small warn" : "small";
