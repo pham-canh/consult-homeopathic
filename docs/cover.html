@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Consult Homeopathic Physicians — cover</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; }
+  body {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color: #f4f8f5;
+    background:
+      radial-gradient(900px 520px at 88% 18%, rgba(58, 196, 154, .26), transparent 62%),
+      radial-gradient(680px 420px at 4% 100%, rgba(29, 118, 92, .35), transparent 64%),
+      linear-gradient(135deg, #0a1c18 0%, #0e2b24 55%, #103b30 100%);
+    display: flex;
+    align-items: stretch;
+    padding: 54px 56px 48px;
+    gap: 42px;
+  }
+  .left { width: 54%; display: flex; flex-direction: column; }
+  .eyebrow {
+    font-size: 15px; font-weight: 700; letter-spacing: .16em;
+    text-transform: uppercase; color: #8be0c0; margin-bottom: 22px;
+  }
+  h1 { font-size: 66px; line-height: .98; letter-spacing: -.045em; margin: 0 0 18px; }
+  .tag { font-size: 27px; line-height: 1.2; color: #d9efe7; margin: 0 0 24px; }
+  .tag b { color: #8be0c0; font-weight: 700; }
+  .pitch { font-size: 17px; line-height: 1.5; color: #b7d2c8; margin: 0 0 auto; max-width: 520px; }
+  .footer { display: flex; align-items: center; gap: 18px; margin-top: 26px; }
+  .badge {
+    border: 1px solid rgba(139, 224, 192, .38); border-radius: 999px;
+    padding: 9px 14px; font-size: 13px; font-weight: 600; color: #c8eee0;
+    background: rgba(139, 224, 192, .07);
+  }
+  .url { font-size: 14px; color: #8fb7a9; letter-spacing: .01em; }
+  .right { width: 46%; display: flex; align-items: center; }
+  .shot {
+    position: relative; width: 100%; height: 496px; border-radius: 20px;
+    overflow: hidden; border: 1px solid rgba(183, 242, 221, .22);
+    box-shadow: 0 34px 80px rgba(0, 0, 0, .48);
+    background: #edf3ef;
+  }
+  .shot img { width: 100%; height: 100%; object-fit: cover; object-position: 30% 0; display: block; }
+  .shot::after {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(90deg, rgba(10, 28, 24, .22), transparent 32%);
+    pointer-events: none;
+  }
+  .safety {
+    position: absolute; left: 18px; bottom: 18px; z-index: 2;
+    background: rgba(8, 30, 25, .9); color: #d9efe7;
+    border: 1px solid rgba(139, 224, 192, .35);
+    border-radius: 12px; padding: 10px 13px; font-size: 12px; line-height: 1.35;
+    max-width: 250px; backdrop-filter: blur(8px);
+  }
+  .safety b { color: #8be0c0; }
+</style>
+</head>
+<body>
+  <div class="left">
+    <div class="eyebrow">Vultr Agent Rush · Challenge 2</div>
+    <h1>Consult<br>Homeopathic<br>Physicians</h1>
+    <p class="tag">AI intake. <b>Doctor decides.</b></p>
+    <p class="pitch">A safe, multi-step clinic workflow: conversational intake,
+      deterministic emergency screening, lab-report reading, structured case
+      preparation, human approval, email and follow-up escalation.</p>
+    <div class="footer">
+      <span class="badge">Live on Vultr</span>
+      <span class="url">consult-homeopathic.207.148.72.102.sslip.io</span>
+    </div>
+  </div>
+  <div class="right">
+    <div class="shot">
+      <img src="doctor.png" alt="Clinic operations dashboard">
+      <div class="safety"><b>Human approval is a hard gate.</b><br>The AI never diagnoses or prescribes.</div>
+    </div>
+  </div>
+</body>
+</html>

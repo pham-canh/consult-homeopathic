@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Consult Homeopathic Physicians — pitch deck</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #d9e2dc; }
+  body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; color: #0d241d; }
+  @page { size: 1280px 720px; margin: 0; }
+  .slide {
+    position: relative; width: 1280px; height: 720px; overflow: hidden;
+    background: #f5f8f4; page-break-after: always; break-after: page;
+    padding: 54px 64px 48px; display: flex; flex-direction: column;
+  }
+  .slide:last-child { page-break-after: auto; break-after: auto; }
+  .top { display: flex; align-items: center; justify-content: space-between;
+    font-size: 13px; font-weight: 700; letter-spacing: .14em;
+    text-transform: uppercase; color: #2b6a56; margin-bottom: 26px; }
+  .top .num { color: #7f9b90; letter-spacing: .08em; }
+  h1 { font-size: 58px; line-height: 1.02; letter-spacing: -.04em; margin: 0; }
+  h2 { font-size: 50px; line-height: 1.04; letter-spacing: -.035em; margin: 0 0 24px; }
+  h3 { font-size: 23px; line-height: 1.2; margin: 0 0 10px; }
+  p { font-size: 20px; line-height: 1.45; margin: 0; color: #31483f; }
+  .lede { font-size: 25px; line-height: 1.38; color: #2a443a; }
+  .accent { color: #0b7a5e; }
+  .muted { color: #678177; }
+  .rule { height: 5px; width: 86px; background: #16a779; border-radius: 99px; margin: 22px 0 26px; }
+  .footer { position: absolute; left: 64px; right: 64px; bottom: 22px;
+    display: flex; justify-content: space-between; font-size: 12px;
+    color: #7a9189; letter-spacing: .01em; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 34px; }
+  .card { background: #fff; border: 1px solid #d8e4dd; border-radius: 18px;
+    padding: 24px 24px 22px; box-shadow: 0 10px 26px rgba(13, 36, 29, .05); }
+  .card.hot { background: #0d2a22; border-color: #0d2a22; color: #eef8f3; }
+  .card.hot p { color: #c3ded2; }
+  .card.hot .kicker { color: #8be0c0; }
+  .kicker { font-size: 12px; font-weight: 800; letter-spacing: .12em;
+    text-transform: uppercase; color: #0b7a5e; margin-bottom: 10px; }
+  .big { font-size: 52px; line-height: 1; letter-spacing: -.04em; font-weight: 700;
+    color: #0b7a5e; margin: 0 0 10px; }
+  .big small { font-size: 18px; letter-spacing: 0; color: #678177; font-weight: 600; }
+  .pill { display: inline-block; padding: 8px 12px; border-radius: 999px;
+    background: #e1f3ea; color: #0b6d54; font-size: 13px; font-weight: 700; }
+  .cover { background:
+      radial-gradient(780px 460px at 86% 20%, rgba(49, 190, 145, .28), transparent 62%),
+      radial-gradient(580px 380px at 3% 100%, rgba(22, 118, 92, .35), transparent 65%),
+      linear-gradient(135deg, #091c17 0%, #0d2a22 58%, #103a2f 100%);
+    color: #f2f8f4; padding: 52px 58px 44px; }
+  .cover .top { color: #8be0c0; margin-bottom: 32px; }
+  .cover h1 { font-size: 64px; max-width: 690px; }
+  .cover .tag { font-size: 27px; color: #d8eee5; margin-top: 18px; }
+  .cover .tag b { color: #8be0c0; }
+  .cover .sub { font-size: 17px; line-height: 1.5; color: #b4d1c6;
+    max-width: 590px; margin-top: 22px; }
+  .cover .links { position: absolute; left: 58px; bottom: 44px; display: flex;
+    gap: 14px; align-items: center; }
+  .cover .links .url { color: #9bbfb2; font-size: 13px; }
+  .cover .shot { position: absolute; right: -118px; top: 158px; width: 590px;
+    height: 410px; border-radius: 18px; overflow: hidden;
+    border: 1px solid rgba(175, 237, 214, .25);
+    box-shadow: 0 30px 80px rgba(0, 0, 0, .48); transform: rotate(-2deg); }
+  .cover .shot img { width: 100%; height: 100%; object-fit: cover; object-position: 28% 0; }
+  .cover .foot { position: absolute; right: 58px; bottom: 44px; font-size: 12px; color: #78a294; }
+  .flow { display: flex; align-items: stretch; gap: 10px; margin-top: 8px; }
+  .flow .step { flex: 1; padding: 20px 18px; border-radius: 16px; background: #fff;
+    border: 1px solid #d8e4dd; }
+  .flow .step .n { font-size: 12px; font-weight: 800; color: #0b7a5e; letter-spacing: .12em; }
+  .flow .step h3 { font-size: 20px; margin-top: 8px; }
+  .flow .step p { font-size: 16px; line-height: 1.4; }
+  .arrow { display: flex; align-items: center; color: #72a493; font-size: 22px; font-weight: 700; }
+  .gate { margin-top: 20px; background: #0d2a22; color: #eef8f3; border-radius: 14px;
+    padding: 18px 22px; display: flex; align-items: center; gap: 18px; }
+  .gate strong { color: #8be0c0; font-size: 16px; white-space: nowrap; }
+  .gate span { color: #c3ded2; font-size: 16px; }
+  .steps { display: flex; flex-direction: column; gap: 14px; }
+  .steprow { display: flex; gap: 14px; align-items: flex-start; }
+  .steprow .n { width: 30px; height: 30px; flex: 0 0 30px; border-radius: 50%;
+    background: #0b7a5e; color: white; font-size: 14px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center; margin-top: 1px; }
+  .steprow p { font-size: 18px; line-height: 1.35; }
+  .shotcard { background: #e8f0eb; border-radius: 18px; overflow: hidden;
+    border: 1px solid #d5e2db; height: 475px; box-shadow: 0 18px 46px rgba(13,36,29,.12); }
+  .shotcard img { width: 100%; height: 100%; object-fit: cover; object-position: 35% 0; display: block; }
+  .diagram { display: grid; grid-template-columns: 1fr 1.2fr 1fr; gap: 16px;
+    align-items: center; margin-top: 16px; }
+  .node { background: #fff; border: 1px solid #d5e2db; border-radius: 16px;
+    padding: 20px; min-height: 108px; }
+  .node h3 { font-size: 19px; }
+  .node p { font-size: 15px; line-height: 1.38; }
+  .node.vultr { background: #0d2a22; color: #eef8f3; border-color: #0d2a22; }
+  .node.vultr p { color: #c3ded2; }
+  .node.vultr .kicker { color: #8be0c0; }
+  .stack { display: flex; flex-direction: column; gap: 12px; }
+  .between { text-align: center; color: #6a9585; font-size: 22px; font-weight: 700; }
+  .safetygrid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 10px; }
+  .safetygrid .card { min-height: 158px; }
+  .safetygrid h3 { font-size: 21px; }
+  .safetygrid p { font-size: 16px; line-height: 1.4; }
+  .statrow { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; margin: 22px 0 24px; }
+  .statrow .card { padding: 22px; }
+  .statrow .big { font-size: 42px; }
+  .equation { background: #e4f2eb; border-radius: 14px; padding: 17px 20px;
+    font-size: 17px; color: #27483c; line-height: 1.45; }
+  .equation b { color: #0b6d54; }
+  .pricing { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 8px; }
+  .price { background: #fff; border: 1px solid #d8e4dd; border-radius: 16px; padding: 20px; }
+  .price.featured { background: #0d2a22; color: #eef8f3; border-color: #0d2a22; }
+  .price.featured p, .price.featured .muted { color: #bcd8cc; }
+  .price .amount { font-size: 34px; font-weight: 800; letter-spacing: -.03em; margin: 6px 0 4px; }
+  .price .amount small { font-size: 14px; font-weight: 600; letter-spacing: 0; color: #678177; }
+  .price.featured .amount small { color: #8fb7a8; }
+  .roi { margin-top: 18px; border-left: 5px solid #16a779; padding: 4px 0 4px 18px; }
+  .roi p { font-size: 19px; }
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 6px; }
+  .list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 11px; }
+  .list li { position: relative; padding-left: 22px; font-size: 18px; line-height: 1.35; color: #31483f; }
+  .list li::before { content: ""; position: absolute; left: 0; top: 7px; width: 8px; height: 8px;
+    border-radius: 50%; background: #16a779; }
+  .darklist li { color: #c3ded2; }
+  .roadmap { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 12px; }
+  .roadmap .card { min-height: 148px; }
+  .roadmap h3 { font-size: 19px; }
+  .roadmap p { font-size: 15px; line-height: 1.4; }
+  .links { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 20px; }
+  .chip { display: inline-block; background: #e1f3ea; color: #0b6d54; border-radius: 999px;
+    padding: 8px 12px; font-size: 13px; font-weight: 700; }
+  .quote { font-size: 25px; line-height: 1.4; color: #12382c; max-width: 980px; }
+  .quote b { color: #0b7a5e; }
+</style>
+</head>
+<body>
+
+<section class="slide cover">
+  <div class="top"><span>Vultr Agent Rush · Challenge 2</span><span class="num">01 / 10</span></div>
+  <h1>Consult Homeopathic Physicians</h1>
+  <p class="tag">AI intake. <b>Doctor decides.</b></p>
+  <p class="sub">A safe, multi-step clinic workflow: conversational intake, deterministic
+    emergency screening, lab-report reading, structured case preparation, human
+    approval, email and follow-up escalation.</p>
+  <div class="links">
+    <span class="pill">Live on Vultr</span>
+    <span class="url">consult-homeopathic.207.148.72.102.sslip.io</span>
+  </div>
+  <div class="shot"><img src="doctor.png" alt="Clinic operations dashboard"></div>
+  <div class="foot">Synthetic demo data. Not a medical device.</div>
+</section>
+
+<section class="slide">
+  <div class="top"><span>Problem</span><span class="num">02 / 10</span></div>
+  <h2>Intake work steals clinical attention.</h2>
+  <div class="rule"></div>
+  <div class="grid3">
+    <div class="card">
+      <div class="kicker">Who feels it</div>
+      <h3>A small clinic with no intake team</h3>
+      <p>The clinician, front desk and practice owner all handle the same new-patient
+        story across phone, chat, paper and inbox.</p>
+    </div>
+    <div class="card">
+      <div class="kicker">The moment</div>
+      <h3>A lab PDF, a waiting patient, a red flag</h3>
+      <p>Symptoms, history, allergies, medications and lab values arrive unstructured.
+        The urgent case competes with the routine paperwork.</p>
+    </div>
+    <div class="card hot">
+      <div class="kicker">The expensive failure</div>
+      <h3>A red flag buried in the story</h3>
+      <p>Missed escalation is the failure that matters. Speed without a safety gate
+        is not a product.</p>
+    </div>
+  </div>
+  <div class="quote" style="margin-top: 30px;">The doctor should spend time
+    <b>deciding</b>, not retyping the patient story.</div>
+  <div class="footer"><span>Consult Homeopathic Physicians</span><span>Vultr Agent Rush · Challenge 2</span></div>
+</section>
+
+<section class="slide">
+  <div class="top"><span>Solution</span><span class="num">03 / 10</span></div>
+  <h2>One case record. Two workflows. One hard gate.</h2>
+  <div class="flow">
+    <div class="step">
+      <div class="n">PATIENT</div>
+      <h3>Talk, attach, choose</h3>
+      <p>A short conversation, an optional text/PDF lab report and two or three
+        plain-language care paths.</p>
+    </div>
+    <div class="arrow">→</div>
+    <div class="step">
+      <div class="n">AGENT</div>
+      <h3>Screen, structure, prepare</h3>
+      <p>Deterministic red-flag gate, structured history, lab parsing, summary,
+        safety warnings and a follow-up plan.</p>
+    </div>
+    <div class="arrow">→</div>
+    <div class="step">
+      <div class="n">DOCTOR</div>
+      <h3>Review, edit, approve</h3>
+      <p>The operations console shows the case, report, conversation and audit
+        trail. Approval is the only path that sends a plan.</p>
+    </div>
+  </div>
+  <div class="gate">
+    <strong>HUMAN APPROVAL IS A HARD GATE</strong>
+    <span>The AI never diagnoses and never prescribes. Every approval is single-use and audited.</span>
+  </div>
+  <div class="footer"><span>Consult Homeopathic Physicians</span><span>Vultr Agent Rush · Challenge 2</span></div>
+</section>
+
+<section class="slide">
+  <div class="top"><span>Live demo</span><span class="num">04 / 10</span></div>
+  <h2>The golden path, running now.</h2>
+  <div class="grid2" style="margin-top: 8px;">
+    <div>
+      <p class="lede" style="margin-bottom: 18px;">Open the public app, then sign in
+        to the clinic console. The whole loop takes about two minutes.</p>
+      <div class="steps">
+        <div class="steprow"><div class="n">1</div><p>Complete a synthetic intake and choose a care option.</p></div>
+        <div class="steprow"><div class="n">2</div><p>Sign in at <b>/doctor</b> and open the pending case.</p></div>
+        <div class="steprow"><div class="n">3</div><p>Inspect the summary, lab values, allergy warning and conversation; approve a plan.</p></div>
+        <div class="steprow"><div class="n">4</div><p>See the plan in Outbox, then submit a red-flag follow-up and watch the case escalate.</p></div>
+      </div>
+      <div class="equation" style="margin-top: 20px;">
+        Live app: <b>consult-homeopathic.207.148.72.102.sslip.io</b><br>
+        Dashboard: <b>/doctor</b> · user <b>doctor</b> · password in submission notes
+      </div>
+    </div>
+    <div class="shotcard"><img src="case.png" alt="Case record with summary, reports, conversation, decision and audit tabs"></div>
+  </div>
+  <div class="footer"><span>Synthetic data only</span><span>Vultr Agent Rush · Challenge 2</span></div>
+</section>
+
+<section class="slide">
+  <div class="top"><span>Architecture</span><span class="num">05 / 10</span></div>
+  <h2>Vultr is the control plane.</h2>
+  <div class="diagram">
+    <div class="stack">
+      <div class="node">
+        <div class="kicker">Patient browser</div>
+        <h3>Intake + follow-up</h3>
+        <p>Public pages, no staff credential.</p>
+      </div>
+      <div class="node">
+        <div class="kicker">Doctor browser</div>
+        <h3>Operations console</h3>
+        <p>Signed session, staff APIs only.</p>
+      </div>
+    </div>
+    <div class="node vultr">
+      <div class="kicker">Vultr Cloud Compute</div>
+      <h3>FastAPI control layer</h3>
+      <p>Case state · deterministic safety gate · approval gate · audit trail ·
+        SQLite · reports · email · scheduler</p>
+      <div style="height: 12px"></div>
+      <span class="pill" style="background: rgba(139,224,192,.12); color:#8be0c0;">Caddy TLS · systemd</span>
+    </div>
+    <div class="stack">
+      <div class="node">
+        <div class="kicker">Vultr Serverless Inference</div>
+        <h3>Language model</h3>
+        <p>OpenAI-compatible endpoint; the key stays server-side.</p>
+      </div>
+      <div class="node">
+        <div class="kicker">Verifiable output</div>
+        <h3>Plan + audit + follow-up</h3>
+        <p>Email outbox, token check-in and escalation state.</p>
+      </div>
+    </div>
+  </div>
+  <div class="equation" style="margin-top: 22px;">
+    <b>Model drafts.</b> The application owns state, safety and approval.
+    If inference is unavailable, a labelled rule fallback keeps the workflow usable.
+  </div>
+  <div class="footer"><span>Dedicated VM · no shared database</span><span>Vultr Agent Rush · Challenge 2</span></div>
+</section>
+
+<section class="slide">
+  <div class="top"><span>Safety</span><span class="num">06 / 10</span></div>
+  <h2>Safety is structural, not a prompt.</h2>
+  <div class="rule"></div>
+  <div class="safetygrid">
+    <div class="card">
+      <div class="kicker">Gate 01</div>
+      <h3>Red flags before the model</h3>
+      <p>A deterministic, negation-aware rule gate runs before every model call.
+        The model can add a flag; it cannot override the gate.</p>
+    </div>
+    <div class="card">
+      <div class="kicker">Gate 02</div>
+      <h3>Single-use human approval</h3>
+      <p>Only <b>/approve</b> sends a plan. It requires pending review, cannot run
+        twice and is blocked for emergency cases.</p>
+    </div>
+    <div class="card">
+      <div class="kicker">Gate 03</div>
+      <h3>No AI diagnosis or prescribing</h3>
+      <p>The agent prepares the case. Prescription text is entered by the doctor;
+        a reply guard blocks explicit dosing instructions.</p>
+    </div>
+    <div class="card">
+      <div class="kicker">Gate 04</div>
+      <h3>Everything leaves a trail</h3>
+      <p>Patient, agent, safety and doctor actions are timestamped. Every reply
+        records its engine, including labelled rule fallbacks.</p>
+    </div>
+  </div>
+  <div class="footer"><span>Synthetic data. Not a medical device.</span><span>Vultr Agent Rush · Challenge 2</span></div>
+</section>
+
+<section class="slide">
+  <div class="top"><span>Market</span><span class="num">07 / 10</span></div>
+  <h2>Start with the clinics that feel the pain.</h2>
+  <p class="lede">Small independent clinics and telehealth teams with 1–15 clinicians.
+    They need doctor oversight but cannot staff a full intake and documentation team.</p>
+  <div class="statrow">
+    <div class="card"><div class="big">220k<small>–260k</small></div><p>US physician practices</p></div>
+    <div class="card"><div class="big">~73<small>%</small></div><p>of physician offices have fewer than 50 employees</p></div>
+    <div class="card"><div class="big">$190M<small>–$225M</small></div><p>US-only annual software ceiling at $99/clinic/month</p></div>
+  </div>
+  <div class="equation">
+    <b>Bottom-up:</b> ~160k–190k small practices × $99/month × 12 ≈ $190M–$225M ARR.
+    Expansion: telehealth, multi-clinic groups and English-speaking markets.
+    This is a planning assumption, not a forecast.
+  </div>
+  <div class="footer"><span>Sources: US Census SUSB analysis 2025; AMA/PMC practice size</span><span>Vultr Agent Rush · Challenge 2</span></div>
+</section>
+
+<section class="slide">
+  <div class="top"><span>Business model</span><span class="num">08 / 10</span></div>
+  <h2>Simple SaaS, aligned with clinic value.</h2>
+  <div class="pricing">
+    <div class="price">
+      <div class="kicker">Starter</div>
+      <div class="amount">$99<small>/clinic/month</small></div>
+      <p>1–2 clinicians, intake, case queue and follow-ups.</p>
+    </div>
+    <div class="price featured">
+      <div class="kicker">Clinic</div>
+      <div class="amount">$199<small>/clinic/month</small></div>
+      <p>Up to 5 clinicians, outbox, audit export and priority support.</p>
+    </div>
+    <div class="price">
+      <div class="kicker">Telehealth</div>
+      <div class="amount">$299<small>+ usage</small></div>
+      <p>Higher volume, custom intake forms and integration work.</p>
+    </div>
+  </div>
+  <div class="roi">
+    <p><b>ROI scenario:</b> save 10 minutes per new patient × 20 new patients/week
+      ≈ 3.3 staff hours/week, before counting fewer missed follow-ups and a complete
+      audit trail. The buyer is the practice owner; the daily users are the clinician
+      and front desk.</p>
+  </div>
+  <div class="footer"><span>Initial pricing model for the hackathon</span><span>Vultr Agent Rush · Challenge 2</span></div>
+</section>
+
+<section class="slide">
+  <div class="top"><span>Why AI</span><span class="num">09 / 10</span></div>
+  <h2>Why this needs AI, not another form.</h2>
+  <div class="split">
+    <div class="card">
+      <div class="kicker">What the model does</div>
+      <h3>Meet the patient in their own words</h3>
+      <ul class="list" style="margin-top: 14px;">
+        <li>Understands free-form symptoms, history and medication context.</li>
+        <li>Chooses the next question instead of forcing a fixed form.</li>
+        <li>Extracts a structured case and reads unstructured lab reports.</li>
+        <li>Drafts a summary and safe care options for the doctor.</li>
+      </ul>
+    </div>
+    <div class="card hot">
+      <div class="kicker">What it never does</div>
+      <h3>No diagnosis. No prescription. No approval.</h3>
+      <ul class="list darklist" style="margin-top: 14px;">
+        <li>The deterministic safety gate blocks emergencies first.</li>
+        <li>The doctor edits and approves the plan.</li>
+        <li>No plan is sent without human approval.</li>
+        <li>No API key reaches the browser.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="equation" style="margin-top: 20px;">
+    <b>Why now:</b> capable language models + Vultr Serverless Inference make this
+    deployable without operating a GPU stack. The model is load-bearing, but the
+    control layer remains deterministic.
+  </div>
+  <div class="footer"><span>AI drafts. Rules gate. Doctor decides.</span><span>Vultr Agent Rush · Challenge 2</span></div>
+</section>
+
+<section class="slide">
+  <div class="top"><span>Team · roadmap</span><span class="num">10 / 10</span></div>
+  <h2>Next: pilot with real clinics.</h2>
+  <div class="grid2" style="gap: 28px;">
+    <div>
+      <div class="kicker">Built by</div>
+      <h3 style="font-size: 28px; margin-bottom: 6px;">Canh Pham</h3>
+      <p>Backend, inference integration, workflow design, dashboard and Vultr
+        deployment. Solo build for the Vultr Agent Rush Hackathon.</p>
+      <div class="links">
+        <span class="chip">Live app</span>
+        <span class="chip">/doctor console</span>
+        <span class="chip">76 automated tests</span>
+      </div>
+    </div>
+    <div>
+      <div class="kicker">Next 3 milestones</div>
+      <div class="roadmap">
+        <div class="card"><h3>01 · Pilot</h3><p>2–3 clinic design partners with synthetic and consented data.</p></div>
+        <div class="card"><h3>02 · Integrate</h3><p>SMTP, calendar and EHR/fax handoff for real operations.</p></div>
+        <div class="card"><h3>03 · Harden</h3><p>Per-user auth, consent, encryption at rest and compliance review.</p></div>
+      </div>
+    </div>
+  </div>
+  <div class="equation" style="margin-top: 24px;">
+    <b>Ask:</b> pilot clinics and clinical feedback. <b>Live:</b>
+    consult-homeopathic.207.148.72.102.sslip.io · <b>Source:</b>
+    github.com/pham-canh/consult-homeopathic
+  </div>
+  <div class="footer"><span>Synthetic data only. Not a medical device.</span><span>Thank you.</span></div>
+</section>
+
+</body>
+</html>

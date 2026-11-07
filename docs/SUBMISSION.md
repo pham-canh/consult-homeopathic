@@ -57,6 +57,33 @@ supports OpenAI, Anthropic, Gemini, and any OpenAI-compatible endpoint, so the
 team can supply its own key and model. The VM, firewall group, and SSH key are
 created by `deploy/vultr_provision.py`.
 
+## Business value
+
+The buyer is a small independent clinic or telehealth team with 1–15 clinicians
+that needs doctor oversight but cannot staff a full intake and documentation
+team. Today, new-patient intake, history capture, lab-value transcription and
+follow-up chasing consume clinical and front-desk time; urgent cases compete for
+the same attention, and a missed red flag is the expensive failure.
+
+The US has roughly 220,000–260,000 physician practices, and about 73% of
+physician offices have fewer than 50 employees. At an initial price of $99 per
+clinic per month, the US-only software ceiling is roughly $190M–$225M ARR before
+expansion into telehealth and other English-speaking markets. This is a
+conservative bottom-up planning assumption, not a forecast.
+
+The model is clinic SaaS at $99–$299 per month depending on clinician count,
+plus a usage tier for high-volume telehealth. The practice owner or operations
+manager buys it; the clinician and front desk use it daily. If the product saves
+10 minutes of intake and documentation per new patient, a clinic seeing 20 new
+patients per week saves about 3.3 staff hours per week, before counting fewer
+missed follow-ups and a complete audit trail.
+
+AI is required because intake must understand free-form language, choose the
+next question, extract a structured history and read an unstructured lab report.
+A fixed form cannot do that, and a rules-only chatbot cannot handle the variety.
+The model drafts, the deterministic safety gate blocks emergencies, and the
+doctor makes the final decision.
+
 ## Built with
 
 Python, FastAPI, SQLite, vanilla HTML/CSS/JS, Vultr Cloud Compute,
@@ -69,6 +96,8 @@ OpenAI-compatible endpoints), Caddy, systemd, Docker (optional).
 - Doctor dashboard: https://consult-homeopathic.207.148.72.102.sslip.io/doctor
 - Health: https://consult-homeopathic.207.148.72.102.sslip.io/healthz
 - Source: this repository
+- Cover: `docs/cover.png`
+- Slide deck: `docs/pitch.pdf`
 - This is a code-only submission; no video is included.
 
 ## Tags

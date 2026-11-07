@@ -64,6 +64,42 @@ Core and stretch features from the project overview are therefore present. The
 only deliberately excluded items are real patient data, payments, video calls,
 doctor identity verification, and automated diagnosis or prescribing.
 
+## Business value
+
+**Who pays:** small independent clinics and telehealth teams with 1–15
+clinicians. They need doctor oversight but cannot staff a full intake and
+documentation team.
+
+**Pain:** new-patient intake, history capture, lab-value transcription and
+follow-up chasing consume clinical and front-desk time, while urgent cases
+compete for the same attention. A missed red flag is the expensive failure.
+
+**Market:** the US has roughly 220,000–260,000 physician practices, and about
+73% of physician offices have fewer than 50 employees. At an initial price of
+$99 per clinic per month, the US-only software ceiling is roughly
+$190M–$225M ARR before expansion into telehealth and other English-speaking
+markets. This is a deliberately conservative planning assumption, not a
+forecast.
+
+**Revenue model:** clinic SaaS at $99–$299 per month depending on clinician
+count, plus a usage tier for high-volume telehealth. The buyer is the practice
+owner or operations manager; the daily users are the clinician and front desk.
+Implementation of custom intake forms is an optional service.
+
+**ROI scenario:** if the product saves 10 minutes of intake and documentation
+per new patient, a clinic seeing 20 new patients per week saves about 3.3 staff
+hours per week, before counting fewer missed follow-ups and a complete audit
+trail. The exact saving depends on the clinic's workflow.
+
+**Why AI is required:** intake has to understand free-form language, decide the
+next question, extract a structured history and read an unstructured lab report.
+A fixed form cannot do that, and a rules-only chatbot cannot handle the variety.
+The model drafts, the deterministic safety gate blocks emergencies, and the
+doctor makes the final decision.
+
+Sources: US Census Bureau SUSB analysis of physician offices (2025) and the
+AMA/PMC practice-size data. The TAM is an illustrative bottom-up calculation.
+
 ## Screenshots
 
 Patient intake with lab upload:
@@ -95,6 +131,33 @@ One JSON case record is shared by both flows. Key fields: `case_id`, `patient`
 `urgency`, `reports`, `care_options`, `selected_option`, `summary`, `doctor`,
 `email`, `follow_up`, `transcript`, `needs_attention`, and `status`
 (`intake` → `pending_review` → `delivered`, or `emergency`).
+
+## How Vultr powers the solution
+
+Vultr is the central control layer, not static hosting:
+
+- **Vultr Cloud Compute:** one dedicated Ubuntu 24.04 VM runs the FastAPI app,
+  SQLite case store, uploaded reports, the follow-up scheduler, the static
+  dashboard and Caddy TLS. No database or service is shared with another
+  project.
+- **Vultr Serverless Inference:** the OpenAI-compatible endpoint at
+  `https://api.vultrinference.com/v1` supplies the language model. The submitted
+  demo uses `deepseek-v4.1-flash-1017`; the key stays server-side and `/healthz`
+  reports the active provider/model.
+- **Control and verification:** the app owns case state, the deterministic
+  safety gate, the single-use approval gate, email delivery and the audit log.
+  The model is used for language understanding, extraction and drafting; it
+  cannot approve a plan or prescribe.
+- **Provisioning:** `deploy/vultr_provision.py` creates the firewall group, SSH
+  key and Cloud Compute instance through the Vultr API;
+  `deploy/deploy.sh` rsyncs the build and restarts the systemd service.
+- **Failure behavior:** if inference is unavailable, a labelled rule fallback
+  keeps the workflow usable. The browser never receives the API key.
+
+The agent's real work is the multi-step clinic workflow: conversational intake,
+red-flag screening, lab-report parsing, case preparation, doctor review,
+approval, email, and scheduled follow-up with automatic escalation. Every step
+is executed by the deployed application and recorded on the VM.
 
 ## Run locally
 
@@ -308,6 +371,8 @@ To make step 5 instant in a demo, set `FOLLOWUP_DAYS=0`.
 
 - `docs/SUBMISSION.md` — title, descriptions, tags, limitations
 - `docs/ARCHITECTURE.md` — flow and threat boundaries
+- `docs/cover.png` — 1200×630 submission cover
+- `docs/pitch.pdf` — 10-slide project deck
 - `docs/ui.png`, `docs/doctor.png`, `docs/case.png` — intake, dashboard and case-record screenshots
 - This is a code-only submission; no video is included.
 
