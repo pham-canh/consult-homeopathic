@@ -78,11 +78,13 @@ OpenAI-compatible endpoints), Caddy, systemd, Docker (optional).
 
 ## Demo accounts / data
 
-All records are synthetic. The clinic dashboard uses a shared demo password set
-server-side through `CONSULT_DASHBOARD_PASSWORD`; the credential is shared with
-judges in the submission notes and is not committed to the repository. Patient
-intake and public follow-up links need no login. A production deployment would
-add per-user identity, MFA, and consent management.
+All records are synthetic. Open the live dashboard at
+https://consult-homeopathic.207.148.72.102.sslip.io/doctor and sign in with user
+`doctor`. The shared demo password is set server-side through
+`CONSULT_DASHBOARD_PASSWORD`; it is shared with judges in the submission access
+notes and is not committed to the repository. Patient intake, care-option choice
+and public follow-up links need no login. A production deployment would add
+per-user identity, MFA, and consent management.
 
 ## What is complete
 

@@ -19,6 +19,30 @@ The agent never diagnoses and never prescribes.
 
 This is a code-only submission; no demo video is included.
 
+## Try the live demo
+
+| | |
+|---|---|
+| Live patient app | https://consult-homeopathic.207.148.72.102.sslip.io/ |
+| Doctor dashboard | https://consult-homeopathic.207.148.72.102.sslip.io/doctor |
+| Demo user | `doctor` |
+| Demo password | Provided in the lablab submission access notes; intentionally not committed to this public repository |
+| Data | Synthetic only; no real patient information |
+
+Fast path for judges:
+
+1. Complete a short intake on the patient app and choose a care option.
+2. Open the doctor dashboard, sign in as `doctor`, and open the pending case.
+3. Review the summary, lab report, conversation and safety warnings, then approve
+   a plan. The plan appears in **Outbox** and a follow-up check-in is scheduled.
+4. Open the follow-up link and report a red-flag symptom. The case escalates to
+   **Emergency** and appears in the dashboard attention queue.
+
+The dashboard needs a login because it exposes patient cases and can approve
+plans, prescriptions and follow-up messages. Patient intake, care-option choice
+and public follow-up links stay open so judges can test the full loop without
+staff credentials.
+
 ## What is in this build
 
 | Area | Implemented |
@@ -146,12 +170,26 @@ CONSULT_FAKE_LLM=1 CONSULT_DISABLE_SCHEDULER=1 python3 -m pytest tests/ -q
   email body written to disk in file mode.
 - **Settings** — provider/model, engine, storage, email mode and auth state.
 
+**Live access:** open `/doctor`, sign in with user `doctor`, and use the demo
+password from the lablab submission access notes. The credential is not stored
+in this repository; it exists only in the server environment.
+
 Set `CONSULT_DASHBOARD_PASSWORD` to require a shared clinic password. Sessions
 are HMAC-signed, `HttpOnly`, `SameSite=Lax` cookies that last 8 hours; when the
 variable is empty the dashboard stays open for local demos. `CONSULT_DASHBOARD_USER`
 sets the display name and `CONSULT_SESSION_SECRET` optionally pins the cookie key.
 When enabled, unauthenticated staff requests receive `401` and `/doctor`
 redirects to `/login`. The patient intake and public follow-up pages stay public.
+
+To run locally with the same protection:
+
+```bash
+CONSULT_DASHBOARD_PASSWORD=choose-a-local-password python3 app.py
+```
+
+Remove the variable to return to the open local demo mode. On the VM, edit
+`/etc/consult-homeopathic/consult.env` and restart `consult-homeopathic` to
+rotate the shared password.
 
 ## API
 
