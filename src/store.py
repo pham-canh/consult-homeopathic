@@ -183,6 +183,14 @@ def get_followup(case_id: str) -> dict | None:
     return dict(row) if row else None
 
 
+def list_followups(limit: int = 500) -> list[dict]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT case_id, token, due_at, sent_at, created_at FROM followups "
+            "ORDER BY due_at ASC LIMIT ?", (int(limit),)).fetchall()
+    return [dict(row) for row in rows]
+
+
 def health() -> dict:
     path = Path(db_path())
     with _connect() as conn:

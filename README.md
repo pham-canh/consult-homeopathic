@@ -27,7 +27,7 @@ This is a code-only submission; no demo video is included.
 | Emergency gate | Deterministic red-flag rules run before every model call; negation-aware; cannot be overridden |
 | Lab report reader | `.txt`, `.md`, `.csv`, `.pdf` upload; deterministic value parsing plus an optional model summary; abnormal values flagged |
 | Care options | Two or three care paths with plain-language reasons; the patient chooses one |
-| Doctor dashboard | Review queue, full transcript, structured summary, allergy and interaction warnings, report findings, audit trail |
+| Doctor dashboard | Protected operations dashboard with overview metrics, searchable case queue, case drawers (summary, reports, conversation, decision, audit), follow-up queue, outbox and runtime settings |
 | Human approval | `/approve` is the only path that sends a plan; approval is single-use and blocked for emergency cases |
 | Email delivery | Real SMTP when configured, otherwise a labelled `.eml` outbox |
 | Follow-up agent | Check-in is scheduled after approval, emailed with a token link, and escalates automatically on a red flag |
@@ -46,9 +46,13 @@ Patient intake with lab upload:
 
 ![Patient intake](docs/ui.png)
 
-Doctor review dashboard with the structured case and audit trail:
+Clinic operations dashboard with volume, attention queue and runtime status:
 
 ![Doctor dashboard](docs/doctor.png)
+
+Case record with tabbed summary, reports, conversation, decision and audit trail:
+
+![Case record](docs/case.png)
 
 ## Architecture
 
@@ -122,25 +126,52 @@ restart.
 Without a key the app still runs and says so: intake falls back to the
 deterministic rule engine, and `/healthz` reports `llm_key: false`.
 
-Run the tests (no network, no key, 70 tests):
+Run the tests (no network, no key, 76 tests):
 
 ```bash
 CONSULT_FAKE_LLM=1 CONSULT_DISABLE_SCHEDULER=1 python3 -m pytest tests/ -q
 ```
 
+## Dashboard access
+
+`/doctor` is the clinic operations console:
+
+- **Overview** — new-case trend, pending/emergency counts, follow-ups due,
+  delivery stats, attention queue, recent cases and live service health.
+- **Cases** — server-side search across case id, patient, email, complaint and
+  red flags, plus status/urgency filters. Each record opens in a drawer with
+  Summary, Reports, Conversation, Decision and Audit tabs.
+- **Follow-ups** — due, scheduled and sent check-ins with patient links.
+- **Outbox** — every plan, check-in and escalation message, including the exact
+  email body written to disk in file mode.
+- **Settings** — provider/model, engine, storage, email mode and auth state.
+
+Set `CONSULT_DASHBOARD_PASSWORD` to require a shared clinic password. Sessions
+are HMAC-signed, `HttpOnly`, `SameSite=Lax` cookies that last 8 hours; when the
+variable is empty the dashboard stays open for local demos. `CONSULT_DASHBOARD_USER`
+sets the display name and `CONSULT_SESSION_SECRET` optionally pins the cookie key.
+When enabled, unauthenticated staff requests receive `401` and `/doctor`
+redirects to `/login`. The patient intake and public follow-up pages stay public.
+
 ## API
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/healthz` | storage, model, key, scheduler |
 | GET | `/` | patient intake |
-| GET | `/doctor` | doctor dashboard |
+| GET | `/doctor` | clinic operations dashboard (password-protected when configured) |
+| GET | `/login` | dashboard sign-in page |
 | GET | `/follow-up/{token}` | public check-in page |
+| GET | `/healthz` | storage, model, key, scheduler, dashboard auth flag |
+| POST | `/api/auth/login` | exchange the dashboard password for a session |
+| GET | `/api/auth/me` | current session state |
+| POST | `/api/auth/logout` | clear the session cookie |
 | POST | `/api/intake/start` | open a case (name, email) |
 | POST | `/api/intake/{id}/message` | one patient turn (safety gate + model) |
 | POST | `/api/intake/{id}/report` | upload a lab report |
 | POST | `/api/cases/{id}/choose` | choose a care option |
-| GET | `/api/doctor/cases?status=` | review queue |
+| GET | `/api/doctor/cases` | case queue with `status`, `q`, `urgency`, `limit`, `offset` |
+| GET | `/api/dashboard` | overview metrics, trend, attention and recent cases |
+| GET | `/api/followups` | follow-up queue with `state` filter |
 | POST | `/api/cases/{id}/approve` | doctor decision, email plan, schedule follow-up |
 | POST | `/api/cases/{id}/follow-up` | log a follow-up report |
 | POST | `/api/cases/{id}/follow-up/send` | send the scheduled check-in now |
@@ -149,8 +180,12 @@ CONSULT_FAKE_LLM=1 CONSULT_DISABLE_SCHEDULER=1 python3 -m pytest tests/ -q
 | GET | `/api/emails/{id}` | open one outbox email by id |
 | GET | `/api/cases/{id}` | full case, reports, audit trail, warnings |
 
-Invalid state transitions return `409`; invalid uploads return `400`; unknown
-cases and tokens return `404`.
+Staff endpoints (`/api/doctor/cases`, `/api/dashboard`, `/api/followups`,
+case detail/approve/follow-up, mailbox and email bodies) require a valid session
+when `CONSULT_DASHBOARD_PASSWORD` is set. Patient intake, choice and public
+follow-up endpoints stay open. Invalid state transitions return `409`; invalid
+uploads return `400`; unknown cases and tokens return `404`; unauthenticated
+staff requests return `401`.
 
 ## Safety design
 
@@ -223,8 +258,8 @@ The image runs as a non-root user and stores SQLite, reports, and emails in the
    small lab report, choose **Online doctor review**.
 2. Second patient reports chest pain; the agent stops and shows emergency
    guidance.
-3. Doctor dashboard: open the pending case, see the structured summary, lab
-   values, and allergy warning, edit the advice, approve.
+3. Clinic dashboard: sign in, scan Overview, open the pending case from Cases,
+   inspect the summary, lab values and allergy warning, then approve.
 4. Open the outbox and show the exact plan email; the follow-up link is in it.
 5. Send the check-in now and open the public link; submit "chest pain" to show
    the automatic escalation and the `needs_attention` banner.
@@ -235,15 +270,15 @@ To make step 5 instant in a demo, set `FOLLOWUP_DAYS=0`.
 
 - `docs/SUBMISSION.md` — title, descriptions, tags, limitations
 - `docs/ARCHITECTURE.md` — flow and threat boundaries
-- `docs/ui.png`, `docs/doctor.png` — intake and dashboard screenshots
+- `docs/ui.png`, `docs/doctor.png`, `docs/case.png` — intake, dashboard and case-record screenshots
 - This is a code-only submission; no video is included.
 
 ## What is deliberately out of scope
 
 Real patient data, real payments, video calls, doctor identity verification, and
-automated diagnosis or prescribing. The doctor dashboard is open for judges in
-this demo; production needs authentication, consent, encryption at rest, and
-health-data compliance.
+automated diagnosis or prescribing. The dashboard supports shared-password
+access for this demo; production still needs per-user identity, MFA, consent,
+encryption at rest, and health-data compliance.
 
 ## Team
 

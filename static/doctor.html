@@ -3,55 +3,247 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Doctor dashboard — Consult (prototype)</title>
+  <title>Clinic dashboard — Consult (prototype)</title>
   <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/dashboard.css">
 </head>
-<body>
-  <header class="topbar">
-    <div class="brand">
-      <div class="dot">✚</div>
-      <div>Consult <small>Doctor dashboard · prototype</small></div>
-    </div>
-    <div class="top-actions">
-      <span class="pill amber">Synthetic patients only</span>
-      <a class="btn ghost small" href="/">Patient intake</a>
-      <button class="btn small" id="refresh-btn">Refresh</button>
-    </div>
-  </header>
-
-  <main class="wrap">
-    <div class="disclaimer">
-      <div>⚠</div>
-      <div><strong>Doctor in the loop.</strong> The AI prepared this case; it did
-      not diagnose or prescribe. Review the record, edit the plan, and approve.
-      Nothing is emailed to the patient before you approve.</div>
-    </div>
-
-    <div class="layout">
-      <section>
-        <div class="tabs" id="tabs">
-          <button class="tab active" data-status="pending_review">Pending</button>
-          <button class="tab" data-status="">All</button>
-          <button class="tab" data-status="emergency">Emergency</button>
-          <button class="tab" data-status="delivered">Delivered</button>
-        </div>
-        <div class="list" id="case-list"><p class="muted small">Loading cases…</p></div>
-      </section>
-
-      <section class="card pad" id="detail">
-        <p class="muted">Select a case on the left to review it.</p>
-      </section>
-    </div>
-
-    <section class="card pad" style="margin-top:20px">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
-        <h2 style="margin:0">Outbox (simulated mailbox)</h2>
-        <span class="small muted">Sends real email when SMTP is configured</span>
+<body class="dashboard-body">
+  <aside class="sidebar">
+    <div class="side-brand">
+      <div class="brand-mark">+</div>
+      <div>
+        <b>Consult</b>
+        <small>Clinic operations</small>
       </div>
-      <div class="mailbox" id="mailbox"><p class="muted small">No emails yet.</p></div>
-      <pre class="email hidden" id="email-preview"></pre>
-    </section>
-  </main>
+    </div>
+
+    <nav class="nav" aria-label="Dashboard">
+      <button class="nav-item active" data-view="overview">
+        <span>Overview</span>
+      </button>
+      <button class="nav-item" data-view="cases">
+        <span>Cases</span>
+        <span class="nav-badge hidden" id="nav-pending">0</span>
+      </button>
+      <button class="nav-item" data-view="follow-ups">
+        <span>Follow-ups</span>
+        <span class="nav-badge hidden" id="nav-due">0</span>
+      </button>
+      <button class="nav-item" data-view="outbox">
+        <span>Outbox</span>
+      </button>
+      <button class="nav-item" data-view="settings">
+        <span>Settings</span>
+      </button>
+    </nav>
+
+    <div class="side-note">
+      <strong>Human approval required.</strong>
+      <span>AI prepares the case. A clinician reviews and approves every plan before it is emailed.</span>
+    </div>
+
+    <div class="side-footer">
+      <a href="/" class="side-link">Patient intake</a>
+      <a href="/api/docs" class="side-link">API docs</a>
+      <span class="side-version" id="side-version">v2.2.0</span>
+    </div>
+  </aside>
+
+  <div class="dash-main">
+    <header class="dash-header">
+      <div class="dash-title">
+        <h1 id="page-title">Overview</h1>
+        <p id="page-sub">Clinic activity at a glance</p>
+      </div>
+      <div class="dash-actions">
+        <span class="pill amber">Synthetic data</span>
+        <button class="btn ghost small" id="dash-refresh">Refresh</button>
+        <span class="user-chip hidden" id="user-chip">
+          <span class="avatar-sm" id="user-initial">D</span>
+          <span id="user-name">doctor</span>
+        </span>
+        <button class="btn ghost small hidden" id="logout-btn">Sign out</button>
+      </div>
+    </header>
+
+    <main class="content">
+      <section class="view" id="view-overview">
+        <div class="stat-grid" id="overview-stats">
+          <div class="stat-card"><span class="stat-label">Loading</span><b>—</b></div>
+        </div>
+
+        <div class="grid-two">
+          <section class="panel">
+            <div class="panel-head">
+              <div><h2>Consult volume</h2><p>New cases over the last 7 days</p></div>
+            </div>
+            <div class="trend" id="trend"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <div><h2>Needs attention</h2><p>Emergencies and escalated follow-ups</p></div>
+              <span class="pill red hidden" id="attention-count">0</span>
+            </div>
+            <div class="stack" id="attention-list">
+              <p class="empty">Nothing needs attention.</p>
+            </div>
+          </section>
+        </div>
+
+        <div class="grid-two">
+          <section class="panel">
+            <div class="panel-head">
+              <div><h2>Recent cases</h2><p>Most recently updated records</p></div>
+              <button class="btn ghost small" data-goto="cases">View all</button>
+            </div>
+            <div class="table-wrap" id="recent-table"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <div><h2>System</h2><p>Live service health</p></div>
+              <button class="btn ghost small" id="system-refresh">Check</button>
+            </div>
+            <div class="stack" id="system-card">
+              <p class="empty">Loading runtime status…</p>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view hidden" id="view-cases">
+        <div class="panel">
+          <div class="toolbar">
+            <input class="search-input" id="case-search" type="search"
+                   placeholder="Search case, patient, email, symptom…"
+                   autocomplete="off">
+            <select id="case-status" aria-label="Filter by status">
+              <option value="">All statuses</option>
+              <option value="pending_review">Pending review</option>
+              <option value="emergency">Emergency</option>
+              <option value="delivered">Delivered</option>
+              <option value="intake">Intake</option>
+            </select>
+            <select id="case-urgency" aria-label="Filter by urgency">
+              <option value="">Any urgency</option>
+              <option value="emergency">Emergency</option>
+              <option value="urgent">Urgent</option>
+              <option value="routine">Routine</option>
+            </select>
+            <button class="btn ghost small" id="cases-refresh">Refresh</button>
+          </div>
+          <div class="table-meta">
+            <span id="cases-count">0 cases</span>
+            <span>Click a row to open the full record.</span>
+          </div>
+          <div class="table-wrap" id="case-table">
+            <p class="empty">Loading cases…</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="view hidden" id="view-follow-ups">
+        <div class="panel">
+          <div class="panel-head wide">
+            <div><h2>Follow-up queue</h2><p>Scheduled check-ins, due items and delivery history</p></div>
+            <button class="btn ghost small" id="followups-refresh">Refresh</button>
+          </div>
+          <div class="filter-row" id="followup-filters">
+            <button class="filter-chip active" data-state="">All</button>
+            <button class="filter-chip" data-state="due">Due</button>
+            <button class="filter-chip" data-state="scheduled">Scheduled</button>
+            <button class="filter-chip" data-state="sent">Sent</button>
+          </div>
+          <div class="table-meta">
+            <span id="followups-count">0 check-ins</span>
+            <span>Links are patient-specific; share only with the patient.</span>
+          </div>
+          <div class="table-wrap" id="followup-table">
+            <p class="empty">Loading follow-ups…</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="view hidden" id="view-outbox">
+        <div class="panel outbox-panel">
+          <div class="panel-head wide">
+            <div><h2>Outbox</h2><p>Approved plans, check-ins and escalation alerts</p></div>
+            <button class="btn ghost small" id="outbox-refresh">Refresh</button>
+          </div>
+          <div class="outbox-grid">
+            <div class="mail-list" id="mail-list">
+              <p class="empty">Loading mailbox…</p>
+            </div>
+            <div class="mail-preview" id="mail-preview">
+              <div class="empty-state">
+                <strong>Select a message</strong>
+                <span>Delivery is simulated to local .eml files until SMTP is configured.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view hidden" id="view-settings">
+        <div class="grid-two">
+          <section class="panel">
+            <div class="panel-head">
+              <div><h2>Runtime</h2><p>Model, engine and access configuration</p></div>
+              <button class="btn ghost small" id="settings-refresh">Refresh</button>
+            </div>
+            <div class="stack" id="settings-runtime">
+              <p class="empty">Loading settings…</p>
+            </div>
+          </section>
+          <section class="panel">
+            <div class="panel-head">
+              <div><h2>Environment</h2><p>Server-side configuration, never exposed to patients</p></div>
+            </div>
+            <div class="stack" id="settings-env"></div>
+          </section>
+        </div>
+        <section class="panel">
+          <div class="panel-head wide">
+            <div><h2>Access</h2><p>Shared-password protection for this dashboard</p></div>
+          </div>
+          <div class="stack" id="settings-access"></div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <div class="overlay hidden" id="case-overlay" role="dialog" aria-modal="true"
+       aria-label="Case record">
+    <aside class="drawer">
+      <div class="drawer-top">
+        <div class="drawer-head">
+          <div>
+            <span class="small muted" id="drawer-id">Case</span>
+            <h2 id="drawer-name">Case record</h2>
+          </div>
+          <div class="drawer-head-actions">
+            <span id="drawer-status"></span>
+            <button class="btn ghost small" id="drawer-close" aria-label="Close case">
+              Close
+            </button>
+          </div>
+        </div>
+        <div class="drawer-tabs" id="drawer-tabs">
+          <button class="drawer-tab active" data-tab="summary">Summary</button>
+          <button class="drawer-tab" data-tab="reports">Reports</button>
+          <button class="drawer-tab" data-tab="conversation">Conversation</button>
+          <button class="drawer-tab" data-tab="decision">Decision</button>
+          <button class="drawer-tab" data-tab="audit">Audit</button>
+        </div>
+      </div>
+      <div class="drawer-body" id="drawer-body">
+        <p class="empty">Loading case…</p>
+      </div>
+    </aside>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="/static/doctor.js"></script>
 </body>

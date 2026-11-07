@@ -33,7 +33,7 @@ def ready_case(monkeypatch):
 def test_healthz_reports_version_and_scheduler():
     data = client.get("/healthz").json()
     assert data["status"] == "ok"
-    assert data["version"] == "2.1.0"
+    assert data["version"] == "2.2.0"
     assert "followups" in data
     assert data["storage"]["cases"] >= 0
 
@@ -162,6 +162,7 @@ def test_each_outbox_email_can_be_opened_by_id(monkeypatch):
         response = client.get(f"/api/emails/{row['id']}")
         assert response.status_code == 200
         assert response.json()["case_id"] == case_id
+        assert "Content-Transfer-Encoding" not in response.json()["body"]
         bodies.append(response.json()["content"])
     assert any("Doctor's advice" in body for body in bodies)
     assert any("check-in" in body.lower() for body in bodies)

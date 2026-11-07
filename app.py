@@ -17,14 +17,18 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile  # noqa: E402
-from fastapi.responses import FileResponse, JSONResponse  # noqa: E402
+from fastapi import (Depends, FastAPI, File, HTTPException, Request, Response,  # noqa: E402
+                     UploadFile)
+from fastapi.responses import (FileResponse, JSONResponse,  # noqa: E402
+                               RedirectResponse)
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from pydantic import BaseModel, Field, field_validator  # noqa: E402
 
 import agent  # noqa: E402
+import auth  # noqa: E402
 import case_model  # noqa: E402
 import config  # noqa: E402
+import dashboard  # noqa: E402
 import emailer  # noqa: E402
 import followups  # noqa: E402
 import inference  # noqa: E402
@@ -33,7 +37,7 @@ import store  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT / "static"
-VERSION = "2.1.0"
+VERSION = "2.2.0"
 
 
 @asynccontextmanager
@@ -128,6 +132,10 @@ class FollowUpIn(BaseModel):
     report: str = Field(min_length=1, max_length=2000)
 
 
+class LoginIn(BaseModel):
+    password: str = Field(min_length=1, max_length=200)
+
+
 def _public_case(case: dict, *, staff: bool = False) -> dict:
     follow = dict(case.get("follow_up") or {})
     token = follow.pop("token", "")
@@ -173,6 +181,7 @@ def healthz() -> dict:
         "providers": inference.configured_providers(),
         "mode": "rules (demo)" if config.demo_mode() else "live",
         "email": "smtp" if config.env("SMTP_HOST") else "file (simulated mailbox)",
+        "dashboard_auth": auth.enabled(),
         "followups": {**followups.status(),
                       "poll_seconds": config.env("FOLLOWUP_POLL_SECONDS", "60")},
     }
@@ -184,8 +193,48 @@ def index() -> FileResponse:
 
 
 @app.get("/doctor")
-def doctor() -> FileResponse:
+def doctor(request: Request):
+    if auth.enabled() and not auth.current_user(request):
+        return RedirectResponse("/login?next=/doctor", status_code=303)
     return FileResponse(STATIC / "doctor.html")
+
+
+@app.get("/login")
+def login_page(request: Request):
+    if not auth.enabled() or auth.current_user(request):
+        return RedirectResponse("/doctor", status_code=303)
+    return FileResponse(STATIC / "login.html")
+
+
+@app.post("/api/auth/login")
+def login(body: LoginIn, request: Request, response: Response) -> dict:
+    if not auth.enabled():
+        return {"enabled": False, "authenticated": True, "user": auth.user()}
+    if auth.blocked(request):
+        raise HTTPException(status_code=429,
+                            detail="Too many attempts. Try again in a minute.")
+    if not auth.check_password(body.password):
+        auth.note_failure(request)
+        raise HTTPException(status_code=401, detail="Incorrect password.")
+    auth.clear_failures(request)
+    secure = emailer.public_url().startswith("https://")
+    response.set_cookie(auth.COOKIE, auth.issue(), max_age=auth.SESSION_SECONDS,
+                        httponly=True, samesite="lax", secure=secure, path="/")
+    return {"enabled": True, "authenticated": True, "user": auth.user()}
+
+
+@app.get("/api/auth/me")
+def auth_me(request: Request) -> dict:
+    if not auth.enabled():
+        return {"enabled": False, "authenticated": True, "user": auth.user()}
+    user = auth.current_user(request)
+    return {"enabled": True, "authenticated": bool(user), "user": user}
+
+
+@app.post("/api/auth/logout")
+def logout(response: Response) -> dict:
+    response.delete_cookie(auth.COOKIE, path="/")
+    return {"enabled": auth.enabled(), "authenticated": False, "user": ""}
 
 
 @app.get("/follow-up/{token}")
@@ -237,18 +286,44 @@ def choose(case_id: str, body: ChooseIn) -> dict:
     return {"case": _public_case(case)}
 
 
-@app.get("/api/cases/{case_id}")
+@app.get("/api/cases/{case_id}", dependencies=[Depends(auth.require)])
 def get_case(case_id: str) -> dict:
     return {"case": _public_case(_require(case_id), staff=True)}
 
 
-@app.get("/api/doctor/cases")
-def doctor_cases(status: str = "") -> dict:
-    cases = store.list_cases(status or None)
-    return {"cases": [_public_case(c, staff=True) for c in cases]}
+@app.get("/api/doctor/cases", dependencies=[Depends(auth.require)])
+def doctor_cases(status: str = "", q: str = "", urgency: str = "",
+                 limit: int = 50, offset: int = 0) -> dict:
+    cases = store.list_cases(status or None, limit=2000)
+    if urgency:
+        cases = [case for case in cases if case.get("urgency") == urgency]
+    query = q.strip().lower()
+    if query:
+        cases = [case for case in cases
+                 if query in dashboard.case_search_blob(case)]
+    total = len(cases)
+    limit = max(1, min(limit, 200))
+    offset = max(0, offset)
+    page = cases[offset:offset + limit]
+    return {"cases": [_public_case(case, staff=True) for case in page],
+            "total": total, "limit": limit, "offset": offset}
 
 
-@app.post("/api/cases/{case_id}/approve")
+@app.get("/api/dashboard", dependencies=[Depends(auth.require)])
+def dashboard_stats() -> dict:
+    return dashboard.overview()
+
+
+@app.get("/api/followups", dependencies=[Depends(auth.require)])
+def followup_list(state: str = "") -> dict:
+    rows = dashboard.followups_view()
+    if state:
+        rows = [row for row in rows if row["state"] == state]
+    return {"follow_ups": rows, "total": len(rows)}
+
+
+@app.post("/api/cases/{case_id}/approve",
+          dependencies=[Depends(auth.require)])
 def approve(case_id: str, body: ApproveIn) -> dict:
     _require(case_id)
     case = agent.approve(case_id, advice=body.advice,
@@ -257,14 +332,16 @@ def approve(case_id: str, body: ApproveIn) -> dict:
     return {"case": _public_case(case, staff=True)}
 
 
-@app.post("/api/cases/{case_id}/follow-up")
+@app.post("/api/cases/{case_id}/follow-up",
+          dependencies=[Depends(auth.require)])
 def follow_up(case_id: str, body: FollowUpIn) -> dict:
     _require(case_id)
     case = agent.follow_up(case_id, body.report)
     return {"case": _public_case(case, staff=True)}
 
 
-@app.post("/api/cases/{case_id}/follow-up/send")
+@app.post("/api/cases/{case_id}/follow-up/send",
+          dependencies=[Depends(auth.require)])
 def send_follow_up_now(case_id: str) -> dict:
     case = _require(case_id)
     if case["status"] != case_model.STATUS_DELIVERED:
@@ -308,12 +385,25 @@ def post_followup(token: str, body: FollowUpIn) -> dict:
     return {"follow_up": _public_followup(token)}
 
 
-@app.get("/api/mailbox")
+def _email_body(raw: str) -> str:
+    from email import message_from_string, policy
+
+    try:
+        message = message_from_string(raw, policy=policy.default)
+        part = message.get_body(preferencelist=("plain",))
+        if part is not None:
+            return part.get_content().strip() or raw
+    except (ValueError, KeyError):
+        pass
+    return raw
+
+
+@app.get("/api/mailbox", dependencies=[Depends(auth.require)])
 def mailbox() -> dict:
     return {"emails": store.list_emails()}
 
 
-@app.get("/api/mailbox/{case_id}")
+@app.get("/api/mailbox/{case_id}", dependencies=[Depends(auth.require)])
 def mailbox_item(case_id: str, kind: str = "") -> dict:
     _require(case_id)
     rows = [row for row in store.list_emails(500) if row["case_id"] == case_id]
@@ -325,11 +415,13 @@ def mailbox_item(case_id: str, kind: str = "") -> dict:
     path = Path(row["path"])
     if not path.exists():
         raise HTTPException(status_code=404, detail="email file is missing")
-    return {"case_id": case_id, "content": path.read_text(encoding="utf-8"),
+    content = path.read_text(encoding="utf-8")
+    return {"case_id": case_id, "content": content,
+            "body": _email_body(content),
             "email": _require(case_id).get("email", {})}
 
 
-@app.get("/api/emails/{email_id}")
+@app.get("/api/emails/{email_id}", dependencies=[Depends(auth.require)])
 def email_item(email_id: int) -> dict:
     row = store.get_email(email_id)
     if not row:
@@ -338,8 +430,9 @@ def email_item(email_id: int) -> dict:
     if not path.exists():
         raise HTTPException(status_code=404, detail="email file is missing")
     case = store.get_case(row["case_id"])
-    return {"id": row["id"], "case_id": row["case_id"],
-            "content": path.read_text(encoding="utf-8"),
+    content = path.read_text(encoding="utf-8")
+    return {"id": row["id"], "case_id": row["case_id"], "content": content,
+            "body": _email_body(content),
             "email": (case or {}).get("email", {})}
 
 

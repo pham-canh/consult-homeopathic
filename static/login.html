@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in — Consult clinic dashboard</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/dashboard.css">
+</head>
+<body class="auth-body">
+  <main class="auth-card">
+    <div class="auth-brand">
+      <div class="brand-mark">+</div>
+      <div>
+        <b>Consult</b>
+        <small>Clinic operations</small>
+      </div>
+    </div>
+
+    <h1>Sign in to the dashboard</h1>
+    <p class="auth-lead">Review prepared cases, approve care plans and monitor
+    follow-ups. This prototype uses a shared clinic password.</p>
+
+    <form class="auth-form" id="login-form">
+      <div class="field">
+        <label for="password">Clinic password</label>
+        <div class="password-row">
+          <input id="password" name="password" type="password" required
+                 autocomplete="current-password" autofocus>
+          <button class="btn ghost small" type="button" id="toggle-password">
+            Show
+          </button>
+        </div>
+      </div>
+      <p class="auth-error hidden" id="login-error" role="alert"></p>
+      <button class="btn" id="login-btn" type="submit">Sign in</button>
+    </form>
+
+    <p class="auth-note">Synthetic patients only. No real medical records are
+    stored in this demo.</p>
+    <a class="auth-back" href="/">Back to patient intake</a>
+  </main>
+
+  <script src="/static/login.js"></script>
+</body>
+</html>

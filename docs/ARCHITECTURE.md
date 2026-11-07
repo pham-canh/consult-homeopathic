@@ -43,6 +43,17 @@ duplicate check-in cannot be sent by two workers.
 | Doctor → delivery | Approval is the only write path to email, and it is single-use |
 | Upload → summary | File type and size are checked; parsed values are labelled |
 | Follow-up token | Opaque random token; one public check-in form per link |
+| Dashboard session | Shared password → HMAC-signed cookie; staff APIs require it |
+
+## Dashboard access
+
+`/doctor` and every staff read/write API are protected when
+`CONSULT_DASHBOARD_PASSWORD` is set. A successful login issues an HMAC-signed,
+`HttpOnly`, `SameSite=Lax` cookie for eight hours (`Secure` when the public URL
+is HTTPS); the cookie key comes from `CONSULT_SESSION_SECRET` or is derived from
+the password. Login attempts are rate-limited per client. Without the variable
+the dashboard stays open for local demos and automated tests. Patient intake,
+choice and public follow-up token routes never require the session.
 
 ## Data
 
@@ -79,6 +90,8 @@ service. `/healthz` reports the active provider, model, and configured slots.
 
 ## Demo-only boundary
 
-The doctor dashboard and case read APIs are intentionally unauthenticated for
-judges. Production needs authentication, per-role authorization, consent,
-encryption at rest, and health-data compliance; the app uses synthetic data only.
+The dashboard supports shared-password access for the demo; the live deployment
+may require the credential shared with judges. This is one clinic-wide password,
+not per-user identity. Production needs per-user authentication, per-role
+authorization, MFA, consent, encryption at rest, and health-data compliance; the
+app uses synthetic data only.
