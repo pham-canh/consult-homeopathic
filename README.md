@@ -11,9 +11,9 @@ Challenge: **2 — Powering the Future of Work**
 > This is the complete, independently deployed submission build for Challenge 2.
 > The public app, API, and doctor dashboard run on a dedicated Vultr VM.
 
-The agent collects symptoms and history in a short conversation, screens for
-emergency red flags, reads an uploaded lab report, proposes care options, and
-prepares a structured case. A licensed doctor reviews that case on a dashboard,
+The agent collects symptoms and history in a short conversation (text or
+push-to-talk voice), screens for emergency red flags, reads an uploaded
+document, proposes care options, and prepares a structured case. A licensed doctor reviews that case on a dashboard,
 edits the plan, and approves it. Only then is the plan emailed to the patient.
 The agent never diagnoses and never prescribes.
 
@@ -33,7 +33,7 @@ Fast path for judges:
 
 1. Complete a short intake on the patient app and choose a care option.
 2. Open the doctor dashboard, sign in as `doctor`, and open the pending case.
-3. Review the summary, lab report, conversation and safety warnings, then approve
+3. Review the summary, documents, conversation and safety warnings, then approve
    a plan. The plan appears in **Outbox** and a follow-up check-in is scheduled.
 4. Open the follow-up link and report a red-flag symptom. The case escalates to
    **Emergency** and appears in the dashboard attention queue.
@@ -47,22 +47,41 @@ staff credentials.
 
 | Area | Implemented |
 |---|---|
-| Conversational intake | Plain-language chat with follow-up questions and structured extraction |
+| Conversational intake | Plain-language chat or push-to-talk voice with follow-up questions and structured extraction |
 | Emergency gate | Deterministic red-flag rules run before every model call; negation-aware; cannot be overridden |
-| Lab report reader | `.txt`, `.md`, `.csv`, `.pdf` upload; deterministic value parsing plus an optional model summary; abnormal values flagged |
+| Document reader | `.txt`, `.md`, `.csv`, `.pdf` upload; deterministic value parsing; a document-aware follow-up question; the doctor can open the original file |
 | Care options | Two or three care paths with plain-language reasons; the patient chooses one |
-| Doctor dashboard | Protected operations dashboard with overview metrics, searchable case queue, case drawers (summary, reports, conversation, decision, audit), follow-up queue, outbox and runtime settings |
+| Doctor dashboard | Protected operations dashboard with overview metrics, searchable case queue, case drawers (summary, documents, conversation, decision, audit), prior visits, follow-up queue, outbox and runtime settings |
 | Human approval | `/approve` is the only path that sends a plan; approval is single-use and blocked for emergency cases |
 | Email delivery | Real SMTP when configured, otherwise a labelled `.eml` outbox |
-| Follow-up agent | Check-in is scheduled after approval, emailed with a token link, and escalates automatically on a red flag |
+| Follow-up agent | Check-in is scheduled after approval, emailed with a token link, asks about diet/appetite when relevant, and escalates automatically on a red flag |
 | Safety checks | Allergy cross-reactivity and a short, visible drug-interaction list |
 | Audit trail | Every patient, agent, safety, and doctor action is timestamped |
+| Voice | Push-to-talk recording -> Gemini transcription -> the existing intake agent -> spoken reply; the key stays server-side. OpenAI audio is a fallback. |
 | Model providers | No model id bundled; Vultr, OpenAI, Anthropic, Gemini, and any OpenAI-compatible endpoint |
 | Operations | Health check, SQLite persistence, Dockerfile, systemd unit, Caddy HTTPS, Vultr provisioning script |
 
 Core and stretch features from the project overview are therefore present. The
 only deliberately excluded items are real patient data, payments, video calls,
 doctor identity verification, and automated diagnosis or prescribing.
+
+## Voice and documents
+
+The patient app supports push-to-talk voice: the browser records a short clip,
+the server transcribes it with Gemini (`gemini-3.5-transcribe`), sends the text
+through the same safety gate and intake agent, and returns a spoken reply from
+`gemini-3.8-flash-tts`. Set `GEMINI_API_KEY` (or `VOICE_PROVIDER=openai` with
+`OPENAI_API_KEY`). The key is server-side only; the browser never receives it.
+The recording is not stored, only the transcript. Voice is push-to-talk, not
+full-duplex, and needs microphone permission in the browser.
+
+Documents are uploaded from the patient chat. The server stores the original,
+parses text/PDF/CSV values, adds the findings to the case, and asks the patient
+whether the document is related to the current symptoms. The doctor can open the
+original file from the Documents tab. Images are rejected rather than silently
+ignored because this build has no OCR path. Prior visits are linked by the email
+the patient supplied and are shown to the doctor and passed to the agent as
+context only.
 
 ## Business value
 
@@ -92,7 +111,7 @@ hours per week, before counting fewer missed follow-ups and a complete audit
 trail. The exact saving depends on the clinic's workflow.
 
 **Why AI is required:** intake has to understand free-form language, decide the
-next question, extract a structured history and read an unstructured lab report.
+next question, extract a structured history and read an unstructured document.
 A fixed form cannot do that, and a rules-only chatbot cannot handle the variety.
 The model drafts, the deterministic safety gate blocks emergencies, and the
 doctor makes the final decision.
@@ -102,7 +121,7 @@ AMA/PMC practice-size data. The TAM is an illustrative bottom-up calculation.
 
 ## Screenshots
 
-Patient intake with lab upload:
+Patient intake with voice and document controls:
 
 ![Patient intake](docs/ui.png)
 
@@ -110,9 +129,13 @@ Clinic operations dashboard with volume, attention queue and runtime status:
 
 ![Doctor dashboard](docs/doctor.png)
 
-Case record with tabbed summary, reports, conversation, decision and audit trail:
+Case record with prior visits, diet and the Documents tab:
 
 ![Case record](docs/case.png)
+
+Document review with parsed values and the original-file link:
+
+![Document review](docs/documents.png)
 
 ## Architecture
 
@@ -121,7 +144,7 @@ Patient browser ─┐
                  ├─ FastAPI on a dedicated Vultr VM ── configured inference provider
 Doctor browser  ─┤        │
 Follow-up link  ─┘        ├── SQLite case store + audit trail + follow-up queue
-                          ├── uploaded reports on local disk
+                          ├── uploaded documents on local disk
                           └── email (SMTP or labelled .eml outbox)
 ```
 
@@ -137,7 +160,7 @@ One JSON case record is shared by both flows. Key fields: `case_id`, `patient`
 Vultr is the central control layer, not static hosting:
 
 - **Vultr Cloud Compute:** one dedicated Ubuntu 24.04 VM runs the FastAPI app,
-  SQLite case store, uploaded reports, the follow-up scheduler, the static
+  SQLite case store, uploaded documents, the follow-up scheduler, the static
   dashboard and Caddy TLS. No database or service is shared with another
   project.
 - **Vultr Serverless Inference:** the OpenAI-compatible endpoint at
@@ -213,7 +236,7 @@ restart.
 Without a key the app still runs and says so: intake falls back to the
 deterministic rule engine, and `/healthz` reports `llm_key: false`.
 
-Run the tests (no network, no key, 76 tests):
+Run the tests (no network, no key, 81 tests):
 
 ```bash
 CONSULT_FAKE_LLM=1 CONSULT_DISABLE_SCHEDULER=1 python3 -m pytest tests/ -q
@@ -262,13 +285,14 @@ rotate the shared password.
 | GET | `/doctor` | clinic operations dashboard (password-protected when configured) |
 | GET | `/login` | dashboard sign-in page |
 | GET | `/follow-up/{token}` | public check-in page |
-| GET | `/healthz` | storage, model, key, scheduler, dashboard auth flag |
+| GET | `/healthz` | storage, model, key, voice, scheduler, dashboard auth flag |
 | POST | `/api/auth/login` | exchange the dashboard password for a session |
 | GET | `/api/auth/me` | current session state |
 | POST | `/api/auth/logout` | clear the session cookie |
 | POST | `/api/intake/start` | open a case (name, email) |
 | POST | `/api/intake/{id}/message` | one patient turn (safety gate + model) |
-| POST | `/api/intake/{id}/report` | upload a lab report |
+| POST | `/api/intake/{id}/report` | upload a document |
+| POST | `/api/intake/{id}/voice` | transcribe a clip, run the agent, return spoken reply |
 | POST | `/api/cases/{id}/choose` | choose a care option |
 | GET | `/api/doctor/cases` | case queue with `status`, `q`, `urgency`, `limit`, `offset` |
 | GET | `/api/dashboard` | overview metrics, trend, attention and recent cases |
@@ -279,7 +303,8 @@ rotate the shared password.
 | GET/POST | `/api/follow-up/{token}` | read/submit the public check-in |
 | GET | `/api/mailbox` | sent-plan and check-in outbox |
 | GET | `/api/emails/{id}` | open one outbox email by id |
-| GET | `/api/cases/{id}` | full case, reports, audit trail, warnings |
+| GET | `/api/cases/{id}` | full case, documents, prior visits, audit trail, warnings |
+| GET | `/api/cases/{id}/reports/{index}/file` | download the original document (staff only) |
 
 Staff endpoints (`/api/doctor/cases`, `/api/dashboard`, `/api/followups`,
 case detail/approve/follow-up, mailbox and email bodies) require a valid session
@@ -356,7 +381,7 @@ The image runs as a non-root user and stores SQLite, reports, and emails in the
 ## Demo flow (about two minutes)
 
 1. Patient: "cough and fever for five days, allergic to penicillin", attach a
-   small lab report, choose **Online doctor review**.
+   small document, choose **Online doctor review**.
 2. Second patient reports chest pain; the agent stops and shows emergency
    guidance.
 3. Clinic dashboard: sign in, scan Overview, open the pending case from Cases,
@@ -373,7 +398,7 @@ To make step 5 instant in a demo, set `FOLLOWUP_DAYS=0`.
 - `docs/ARCHITECTURE.md` — flow and threat boundaries
 - `docs/cover.png` — 1200×630 submission cover
 - `docs/pitch.pdf` — 10-slide project deck
-- `docs/ui.png`, `docs/doctor.png`, `docs/case.png` — intake, dashboard and case-record screenshots
+- `docs/ui.png`, `docs/doctor.png`, `docs/case.png`, `docs/documents.png` — intake, dashboard, case-record and document-review screenshots
 - This is a code-only submission; no video is included.
 
 ## What is deliberately out of scope

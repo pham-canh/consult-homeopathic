@@ -33,7 +33,7 @@ def ready_case(monkeypatch):
 def test_healthz_reports_version_and_scheduler():
     data = client.get("/healthz").json()
     assert data["status"] == "ok"
-    assert data["version"] == "2.2.0"
+    assert data["version"] == "2.3.0"
     assert "followups" in data
     assert data["storage"]["cases"] >= 0
 
@@ -59,7 +59,7 @@ def test_lab_report_upload_merges_findings():
     case = response.json()["case"]
     assert case["reports"][0]["filename"] == "labs.txt"
     assert len(case["reports"][0]["findings"]) == 2
-    assert any("Lab report" in line for line in case["summary"]["key_findings"])
+    assert any("Document" in line for line in case["summary"]["key_findings"])
     assert "path" not in case["reports"][0]
 
 

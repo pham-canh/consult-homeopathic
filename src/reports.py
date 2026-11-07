@@ -134,10 +134,10 @@ def parse_with_rules(text: str) -> dict:
     findings = parse_findings(text)
     abnormal = [f for f in findings if f["flag"]]
     summary = (
-        f"Lab report read: {len(findings)} value(s); "
+        f"Document read: {len(findings)} value(s); "
         f"{len(abnormal)} outside the printed reference range."
         if findings else
-        "Lab report read, but no numeric results were recognized."
+        "Document read, but no numeric results were recognized."
     )
     return {"summary": summary, "findings": findings}
 
@@ -183,7 +183,7 @@ def parse_with_model(text: str) -> dict | None:
     summary = str(data.get("summary") or "").strip()[:400]
     if not findings and not summary:
         return None
-    return {"summary": summary or "Lab report read.", "findings": findings[:30]}
+    return {"summary": summary or "Document read.", "findings": findings[:30]}
 
 
 def parse_report(text: str) -> dict:

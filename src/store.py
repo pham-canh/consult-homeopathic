@@ -88,6 +88,38 @@ def list_cases(status: str | None = None, limit: int = 100) -> list[dict]:
     return [json.loads(row["data"]) for row in rows]
 
 
+def prior_cases(case: dict, limit: int = 5) -> list[dict]:
+    """Earlier cases with the same patient email, newest first.
+
+    This is a demo-level patient history keyed by the email the patient
+    supplied. It is only exposed on the authenticated staff case endpoint.
+    """
+    email = ((case.get("patient") or {}).get("email") or "").strip().lower()
+    if not email:
+        return []
+    rows = []
+    for other in list_cases(limit=2000):
+        if other.get("case_id") == case.get("case_id"):
+            continue
+        other_email = ((other.get("patient") or {}).get("email") or "").strip().lower()
+        if other_email != email:
+            continue
+        summary = other.get("summary") or {}
+        doctor = other.get("doctor") or {}
+        rows.append({
+            "case_id": other.get("case_id", ""),
+            "created_at": other.get("created_at", ""),
+            "status": other.get("status", ""),
+            "chief_complaint": other.get("chief_complaint", ""),
+            "summary": summary.get("one_liner", ""),
+            "selected_option": other.get("selected_option", ""),
+            "doctor_advice": doctor.get("advice", ""),
+            "doctor_approved_at": doctor.get("approved_at", ""),
+        })
+    rows.sort(key=lambda row: str(row.get("created_at") or ""), reverse=True)
+    return rows[:max(0, int(limit))]
+
+
 def add_audit(case_id: str, actor: str, action: str, detail: str, at: str) -> None:
     with _connect() as conn:
         conn.execute(

@@ -136,8 +136,8 @@
   <div class="top"><span>Vultr Agent Rush · Challenge 2</span><span class="num">01 / 10</span></div>
   <h1>Consult Homeopathic Physicians</h1>
   <p class="tag">AI intake. <b>Doctor decides.</b></p>
-  <p class="sub">A safe, multi-step clinic workflow: conversational intake, deterministic
-    emergency screening, lab-report reading, structured case preparation, human
+  <p class="sub">A safe, multi-step clinic workflow: conversational intake by text or voice, deterministic
+    emergency screening, document reading, structured case preparation, human
     approval, email and follow-up escalation.</p>
   <div class="links">
     <span class="pill">Live on Vultr</span>
@@ -183,22 +183,22 @@
     <div class="step">
       <div class="n">PATIENT</div>
       <h3>Talk, attach, choose</h3>
-      <p>A short conversation, an optional text/PDF lab report and two or three
-        plain-language care paths.</p>
+      <p>A short text or voice conversation, an optional text/CSV/PDF document and
+        two or three plain-language care paths.</p>
     </div>
     <div class="arrow">→</div>
     <div class="step">
       <div class="n">AGENT</div>
       <h3>Screen, structure, prepare</h3>
-      <p>Deterministic red-flag gate, structured history, lab parsing, summary,
+      <p>Deterministic red-flag gate, structured history, document parsing, summary,
         safety warnings and a follow-up plan.</p>
     </div>
     <div class="arrow">→</div>
     <div class="step">
       <div class="n">DOCTOR</div>
       <h3>Review, edit, approve</h3>
-      <p>The operations console shows the case, report, conversation and audit
-        trail. Approval is the only path that sends a plan.</p>
+      <p>The operations console shows the case, documents, prior visits, conversation
+        and audit trail. Approval is the only path that sends a plan.</p>
     </div>
   </div>
   <div class="gate">
@@ -216,9 +216,9 @@
       <p class="lede" style="margin-bottom: 18px;">Open the public app, then sign in
         to the clinic console. The whole loop takes about two minutes.</p>
       <div class="steps">
-        <div class="steprow"><div class="n">1</div><p>Complete a synthetic intake and choose a care option.</p></div>
+        <div class="steprow"><div class="n">1</div><p>Complete a synthetic intake by text or voice and choose a care option.</p></div>
         <div class="steprow"><div class="n">2</div><p>Sign in at <b>/doctor</b> and open the pending case.</p></div>
-        <div class="steprow"><div class="n">3</div><p>Inspect the summary, lab values, allergy warning and conversation; approve a plan.</p></div>
+        <div class="steprow"><div class="n">3</div><p>Inspect the summary, documents, allergy warning and conversation; approve a plan.</p></div>
         <div class="steprow"><div class="n">4</div><p>See the plan in Outbox, then submit a red-flag follow-up and watch the case escalate.</p></div>
       </div>
       <div class="equation" style="margin-top: 20px;">
@@ -226,7 +226,7 @@
         Dashboard: <b>/doctor</b> · user <b>doctor</b> · password in submission notes
       </div>
     </div>
-    <div class="shotcard"><img src="case.png" alt="Case record with summary, reports, conversation, decision and audit tabs"></div>
+    <div class="shotcard"><img src="case.png" alt="Case record with summary, documents, conversation, decision and audit tabs"></div>
   </div>
   <div class="footer"><span>Synthetic data only</span><span>Vultr Agent Rush · Challenge 2</span></div>
 </section>
@@ -251,7 +251,7 @@
       <div class="kicker">Vultr Cloud Compute</div>
       <h3>FastAPI control layer</h3>
       <p>Case state · deterministic safety gate · approval gate · audit trail ·
-        SQLite · reports · email · scheduler</p>
+        SQLite · documents · email · scheduler</p>
       <div style="height: 12px"></div>
       <span class="pill" style="background: rgba(139,224,192,.12); color:#8be0c0;">Caddy TLS · systemd</span>
     </div>
@@ -365,7 +365,7 @@
       <ul class="list" style="margin-top: 14px;">
         <li>Understands free-form symptoms, history and medication context.</li>
         <li>Chooses the next question instead of forcing a fixed form.</li>
-        <li>Extracts a structured case and reads unstructured lab reports.</li>
+        <li>Extracts a structured case and reads unstructured documents.</li>
         <li>Drafts a summary and safe care options for the doctor.</li>
       </ul>
     </div>

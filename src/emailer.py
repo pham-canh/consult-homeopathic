@@ -63,9 +63,14 @@ def compose_followup(case: dict) -> tuple[str, str, str]:
     to_addr = patient.get("email") or "patient@example.test"
     subject = f"Check-in for case {case['case_id']} — Consult Homeopathic Physicians"
     link = f"{public_url()}/follow-up/{case['follow_up']['token']}"
-    body = "\n".join([
+    lines = [
         fill(FOLLOWUP_CHECKIN, name=patient.get("name") or "there",
              case_id=case["case_id"]),
+    ]
+    if patient.get("diet") or (case.get("duration_days") or 0) >= 7:
+        lines += ["", "Also, how is your appetite and diet? Have you changed "
+                      "what you eat or drink since the visit?"]
+    lines += [
         "",
         link,
         "",
@@ -73,8 +78,8 @@ def compose_followup(case: dict) -> tuple[str, str, str]:
         "waiting for a reply.",
         "",
         "— Consult Homeopathic Physicians (prototype)",
-    ])
-    return to_addr, subject, body
+    ]
+    return to_addr, subject, "\n".join(lines)
 
 
 def _deliver(to_addr: str, subject: str, body: str, case_id: str,

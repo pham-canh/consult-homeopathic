@@ -11,6 +11,7 @@ mailbox. Every model call goes through the configured inference provider.
 """
 from __future__ import annotations
 
+import base64
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -34,10 +35,11 @@ import followups  # noqa: E402
 import inference  # noqa: E402
 import reports  # noqa: E402
 import store  # noqa: E402
+import voice  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT / "static"
-VERSION = "2.2.0"
+VERSION = "2.3.0"
 
 
 @asynccontextmanager
@@ -66,7 +68,8 @@ async def security_headers(request: Request, call_next):
     response.headers.setdefault(
         "Content-Security-Policy",
         "default-src 'self'; style-src 'self' 'unsafe-inline'; "
-        "script-src 'self'; img-src 'self' data:; connect-src 'self'; "
+        "script-src 'self'; img-src 'self' data:; "
+        "media-src 'self' data: blob:; connect-src 'self'; "
         "frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
     )
     if request.url.path.startswith("/api/"):
@@ -81,6 +84,11 @@ async def workflow_error(_: Request, exc: agent.WorkflowError):
 
 @app.exception_handler(reports.ReportError)
 async def report_error(_: Request, exc: reports.ReportError):
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+
+@app.exception_handler(voice.VoiceError)
+async def voice_error(_: Request, exc: voice.VoiceError):
     return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
@@ -182,6 +190,13 @@ def healthz() -> dict:
         "mode": "rules (demo)" if config.demo_mode() else "live",
         "email": "smtp" if config.env("SMTP_HOST") else "file (simulated mailbox)",
         "dashboard_auth": auth.enabled(),
+        "voice": {
+            "enabled": voice.enabled(),
+            "provider": voice.provider() or None,
+            "stt_model": voice.stt_model() if voice.enabled() else None,
+            "tts_model": voice.tts_model() if voice.enabled() else None,
+            "tts_voice": voice.tts_voice() if voice.enabled() else None,
+        },
         "followups": {**followups.status(),
                       "poll_seconds": config.env("FOLLOWUP_POLL_SECONDS", "60")},
     }
@@ -261,6 +276,32 @@ def message(case_id: str, body: MessageIn) -> dict:
             "emergency": result["emergency"], "engine": result["engine"]}
 
 
+@app.post("/api/intake/{case_id}/voice")
+async def voice_message(case_id: str, file: UploadFile = File(...)) -> dict:
+    """Push-to-talk turn: audio in, transcript + reply + audio out."""
+    case = _require(case_id)
+    if case["status"] == case_model.STATUS_EMERGENCY:
+        return {"case": _public_case(case), "reply": case["transcript"][-1]["text"],
+                "transcript": "", "emergency": True,
+                "engine": case.get("engine", ""), "audio": ""}
+    content = await file.read(voice.max_bytes() + 1)
+    if len(content) > voice.max_bytes():
+        raise voice.VoiceError("The recording is too large.")
+    text = voice.transcribe(content, file.filename or "voice.webm",
+                            file.content_type or "audio/webm")
+    result = agent.handle_message(case, text)
+    audio = ""
+    try:
+        audio = base64.b64encode(voice.speech(result["reply"])).decode("ascii")
+    except voice.VoiceError:
+        # The text turn still succeeded; the browser can show the reply.
+        audio = ""
+    return {"case": _public_case(result["case"]), "reply": result["reply"],
+            "transcript": text, "emergency": result["emergency"],
+            "engine": result["engine"], "audio": audio,
+            "audio_mime": voice.speech_mime()}
+
+
 async def _read_upload(file: UploadFile) -> bytes:
     limit = reports.MAX_BYTES + 1
     content = await file.read(limit)
@@ -276,7 +317,8 @@ async def upload_report(case_id: str, file: UploadFile = File(...)) -> dict:
     content = await _read_upload(file)
     case = agent.attach_report(case_id, file.filename or "report",
                                content, file.content_type or "")
-    return {"case": _public_case(case)}
+    return {"case": _public_case(case),
+            "reply": case["transcript"][-1]["text"] if case["transcript"] else ""}
 
 
 @app.post("/api/cases/{case_id}/choose")
@@ -288,7 +330,32 @@ def choose(case_id: str, body: ChooseIn) -> dict:
 
 @app.get("/api/cases/{case_id}", dependencies=[Depends(auth.require)])
 def get_case(case_id: str) -> dict:
-    return {"case": _public_case(_require(case_id), staff=True)}
+    case = _require(case_id)
+    public = _public_case(case, staff=True)
+    public["prior_cases"] = store.prior_cases(case, limit=5)
+    return {"case": public}
+
+
+@app.get("/api/cases/{case_id}/reports/{index}/file",
+         dependencies=[Depends(auth.require)])
+def report_file(case_id: str, index: int):
+    case = _require(case_id)
+    items = case.get("reports") or []
+    if index < 0 or index >= len(items):
+        raise HTTPException(status_code=404, detail="document not found")
+    report = items[index]
+    raw_path = report.get("path") or ""
+    try:
+        resolved = Path(raw_path).resolve()
+        root = config.data_dir().resolve()
+        if not resolved.is_file() or not resolved.is_relative_to(root):
+            raise ValueError
+    except (OSError, ValueError):
+        raise HTTPException(status_code=404, detail="document file not found")
+    return FileResponse(
+        resolved,
+        media_type=report.get("content_type") or "application/octet-stream",
+        filename=report.get("filename") or "document")
 
 
 @app.get("/api/doctor/cases", dependencies=[Depends(auth.require)])

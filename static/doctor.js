@@ -451,8 +451,20 @@ function renderSummary(item) {
         <dt>Allergies</dt><dd>${tags(patient.allergies, "warn")}</dd>
         <dt>Medications</dt><dd>${tags(patient.medications)}</dd>
         <dt>History</dt><dd>${escapeHtml(patient.history || "—")}</dd>
+        <dt>Diet</dt><dd>${escapeHtml(patient.diet || "—")}</dd>
       </dl>
     </div>
+    ${(item.prior_cases || []).length ? `
+    <div class="detail-card">
+      <h3>Previous visits</h3>
+      <div class="timeline">${(item.prior_cases || []).map((prior) => `
+        <div class="timeline-item">
+          <time>${escapeHtml((prior.created_at || "").slice(0, 10))}</time>
+          <span><b>${escapeHtml(prior.case_id || "")}</b>
+            ${escapeHtml(prior.chief_complaint || prior.summary || "No complaint recorded")}
+            ${prior.doctor_advice ? ` — ${escapeHtml(prior.doctor_advice)}` : ""}</span>
+        </div>`).join("")}</div>
+    </div>` : ""}
     <div class="detail-card">
       <h3>Case</h3>
       <dl class="kv">
@@ -490,14 +502,18 @@ function renderSummary(item) {
 function renderReports(item) {
   const reports = item.reports || [];
   if (!reports.length) {
-    return '<div class="detail-card"><p class="muted small">No lab reports attached.</p></div>';
+    return '<div class="detail-card"><p class="muted small">No documents attached.</p></div>';
   }
-  return reports.map((report) => {
+  return reports.map((report, index) => {
     const findings = report.findings || [];
     return `
       <div class="report-card">
-        <b>${escapeHtml(report.filename || "Report")}</b>
+        <b>${escapeHtml(report.filename || "Document")}</b>
         <div class="small muted">${escapeHtml(fmtDate(report.uploaded_at))}</div>
+        <p class="small">
+          <a href="/api/cases/${encodeURIComponent(item.case_id)}/reports/${index}/file"
+             target="_blank" rel="noopener">Open original document</a>
+        </p>
         <p class="small">${escapeHtml(report.summary || "")}</p>
         ${findings.length ? `
           <table class="labs">

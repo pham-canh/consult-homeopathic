@@ -47,7 +47,7 @@
           <p class="small muted">The server can use Vultr, OpenAI, Anthropic
           (Claude), Google (Gemini), or any OpenAI-compatible endpoint; keys stay
           server-side. The app and database run on a Vultr VM. Patients can
-          attach a lab report (.txt, .md, .csv, .pdf). No real patient data is
+          attach a document (.txt, .md, .csv, .pdf). No real patient data is
           used.</p>
         </div>
       </div>
@@ -82,12 +82,14 @@
           <form class="chat-input" id="chat-form">
             <input id="chat-text" placeholder="Describe the symptom…" autocomplete="off">
             <button class="btn ghost icon" id="attach-btn" type="button"
-                    title="Attach a lab report (.txt, .md, .csv, .pdf)">📎</button>
+                    title="Upload a document (.txt, .md, .csv, .pdf)">Document</button>
             <input id="report-file" type="file" class="hidden"
-                   accept=".txt,.md,.csv,.pdf">
+                   accept=".txt,.md,.csv,.pdf,application/pdf,text/plain">
+            <button class="btn ghost icon" id="mic-btn" type="button"
+                    title="Record a voice message" disabled>Mic</button>
             <button class="btn" id="send-btn" type="submit">Send</button>
           </form>
-          <p class="small muted" id="upload-note"></p>
+          <p class="small muted" id="upload-note">Voice and documents are optional. Synthetic data only.</p>
         </div>
       </div>
     </section>

@@ -200,7 +200,10 @@ pre.email { white-space: pre-wrap; background: #0f1f1c; color: #d7f0e9; padding:
 
 .wrap.narrow { max-width: 760px; }
 .card.soft { box-shadow: none; background: #f6faf8; }
-.btn.icon { padding: 10px 12px; font-size: 16px; line-height: 1; }
+.btn.icon { padding: 10px 12px; font-size: 13px; line-height: 1; }
+.btn.recording { background: var(--red); border-color: var(--red); color: #fff; }
+.chat-input { flex-wrap: wrap; }
+.chat-input #chat-text { min-width: 180px; }
 a { color: var(--teal); }
 .labs { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
 .labs th, .labs td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--line); }

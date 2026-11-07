@@ -116,7 +116,7 @@ def test_model_summary_keeps_deterministic_lab_findings(monkeypatch):
         case["case_id"], "labs.txt",
         b"White blood cells 12.4 10^9/L (4.0-10.0)\n", "text/plain")
     lab_line = next(line for line in case["summary"]["key_findings"]
-                    if line.startswith("Lab report"))
+                    if line.startswith("Document"))
 
     monkeypatch.setattr(agent.config, "demo_mode", lambda: False)
     monkeypatch.setattr(agent.inference, "have_key", lambda: True)

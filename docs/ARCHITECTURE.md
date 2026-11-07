@@ -5,9 +5,9 @@
 ```
 Patient browser ─┐
                  ├─ FastAPI (single Vultr VM) ── inference provider
-Doctor browser  ─┤        │
+Doctor browser  ─┤        ├─ Gemini audio API (STT/TTS; OpenAI fallback)
 Follow-up link  ─┘        ├─ SQLite: cases, audit, emails, follow-up queue
-                          ├─ local disk: uploaded reports
+                          ├─ local disk: uploaded documents
                           └─ SMTP or labelled .eml outbox
 ```
 
@@ -19,16 +19,19 @@ duplicate check-in cannot be sent by two workers.
 ## Workflow
 
 1. `start_case` creates the JSON record and greets the patient.
-2. Each message first passes `safety.detect_red_flags`. A match stops the flow
+2. A voice clip is transcribed server-side, then treated as a normal patient
+   message. Audio is not persisted; only the transcript enters the case.
+3. Each message first passes `safety.detect_red_flags`. A match stops the flow
    and returns emergency guidance. The model never sees a message before this
    gate.
-3. If no rule matches, the model (or the rule engine without a key) extracts a
-   structured case and returns care options.
-4. `choose_option` closes intake and moves the case to `pending_review`.
-5. `approve` requires `pending_review`, writes the doctor decision, and sends
+4. If no rule matches, the model (or the rule engine without a key) extracts a
+   structured case and returns care options. An uploaded document is parsed and
+   produces a document-aware follow-up question before the normal next turn.
+5. `choose_option` closes intake and moves the case to `pending_review`.
+6. `approve` requires `pending_review`, writes the doctor decision, and sends
    email before persisting delivery. If sending fails, the case stays pending so
    a doctor can retry rather than a half-delivered record appearing complete.
-6. The follow-up agent sends the scheduled check-in. A public token link accepts
+7. The follow-up agent sends the scheduled check-in. A public token link accepts
    patient updates; a red flag escalates to `emergency` and sets
    `needs_attention`.
 
@@ -41,7 +44,8 @@ duplicate check-in cannot be sent by two workers.
 | Model → red flags | A model flag can stop the flow; it cannot clear a rule flag |
 | Patient → case state | The patient can choose an option, not approve or edit the plan |
 | Doctor → delivery | Approval is the only write path to email, and it is single-use |
-| Upload → summary | File type and size are checked; parsed values are labelled |
+| Upload → summary | File type and size are checked; parsed values are labelled; the original is staff-only |
+| Voice → case state | Audio is transcribed server-side and discarded; the transcript passes the same red-flag gate |
 | Follow-up token | Opaque random token; one public check-in form per link |
 | Dashboard session | Shared password → HMAC-signed cookie; staff APIs require it |
 
@@ -61,9 +65,11 @@ choice and public follow-up token routes never require the session.
 - `audit`: append-only action log (timestamp, actor, action, detail).
 - `emails`: outbox index (subject, recipient, mode, path).
 - `followups`: due time, token, sent marker.
+- Prior visits: derived by matching the patient email; they are context for the
+  doctor and agent, not a verified patient identity.
 
-Reports are stored under `CONSULT_DATA_DIR/reports/<case_id>/`; the API strips
-the server path from responses.
+Documents are stored under `CONSULT_DATA_DIR/reports/<case_id>/`; the API strips
+the server path from responses. The original-file endpoint is staff-only.
 
 ## Model configuration
 
@@ -76,6 +82,11 @@ returned by the API. `scripts/configure_model.py` writes a file with a hidden ke
 prompt; `deploy/configure_model.sh` runs it on the live VM and restarts the
 service. `/healthz` reports the active provider, model, and configured slots.
 
+Voice is configured separately: `VOICE_PROVIDER` selects `gemini` (default when
+`GEMINI_API_KEY` is present) or `openai`. `VOICE_STT_MODEL`,
+`VOICE_TTS_MODEL`, `VOICE_TTS_VOICE`, and `VOICE_LANGUAGE` are read at call
+time. The clinical reasoning provider remains independent.
+
 ## Failure behaviour
 
 - No inference key: explicit `rules (...)` label, the flow still works.
@@ -86,6 +97,8 @@ service. `/healthz` reports the active provider, model, and configured slots.
 - SMTP error during a check-in: the sent marker is cleared and the scheduler
   retries; the audit trail keeps the failure visible.
 - Invalid state transition: HTTP 409 with a plain explanation.
+- Voice provider error: the endpoint returns HTTP 400 with a plain message and
+  the patient can continue in text.
 - Storage failure: `/healthz` returns 503 instead of a false `ok`.
 
 ## Demo-only boundary

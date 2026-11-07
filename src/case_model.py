@@ -48,6 +48,7 @@ def new_case(patient_name: str = "") -> dict:
             "allergies": [],
             "medications": [],
             "history": "",
+            "diet": "",
         },
         "chief_complaint": "",
         "symptoms": [],
@@ -104,7 +105,7 @@ def merge_analysis(case: dict, data: dict) -> dict:
     """Merge a model (or rule-engine) analysis into the case, defensively."""
     incoming = data.get("patient") if isinstance(data.get("patient"), dict) else {}
     patient = case["patient"]
-    for key in ("name", "email", "sex", "history"):
+    for key in ("name", "email", "sex", "history", "diet"):
         value = _as_str(incoming.get(key))
         if key == "email":
             value = value.rstrip(".,;:")
@@ -199,6 +200,8 @@ def rule_summary(case: dict) -> dict:
         findings.append("Current medications: " + ", ".join(patient["medications"]))
     if patient.get("history"):
         findings.append("History: " + patient["history"])
+    if patient.get("diet"):
+        findings.append("Diet: " + patient["diet"])
     if patient.get("age"):
         findings.append(f"Age: {patient['age']}")
 
@@ -214,6 +217,12 @@ def rule_summary(case: dict) -> dict:
 def ensure_summary(case: dict) -> None:
     if not case["summary"].get("one_liner"):
         case["summary"] = rule_summary(case)
+    diet = (case.get("patient") or {}).get("diet")
+    if diet:
+        findings = case["summary"].setdefault("key_findings", [])
+        line = "Diet: " + diet
+        if line not in findings:
+            findings.append(line[:400])
     notes = case["summary"].setdefault("safety_notes", [])
     if SAFETY_NOTE not in notes:
         notes.append(SAFETY_NOTE)

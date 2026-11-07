@@ -35,7 +35,8 @@ Return ONLY a JSON object with exactly these keys:
   "emergency": false,
   "red_flags": ["..."],
   "patient": {"name": "", "email": "", "age": null, "sex": "",
-              "allergies": [], "medications": [], "history": ""},
+              "allergies": [], "medications": [], "history": "",
+              "diet": ""},
   "chief_complaint": "",
   "symptoms": [],
   "duration_days": null,
@@ -52,6 +53,10 @@ Rules:
   bleeding, throat/tongue swelling, self-harm, seizure, severe head injury).
 - Ask at most two short follow-up questions. Collect duration, severity, allergies,
   medications, and an email address for the plan.
+- If the problem has lasted 7 days or more, or it is gastrointestinal or
+  metabolic, ask about appetite and diet and put the answer in patient.diet.
+- prior_cases are earlier visits for the same email. Use them for context only;
+  do not assume the current problem is the same.
 - When you have a complaint, duration, and severity, return 2-3 care_options and
   set ready_for_review true. Options must be care paths, not diagnoses, e.g.
   "Online doctor review", "In-person visit", "Self-care with monitoring".
@@ -84,6 +89,8 @@ ALLERGY = re.compile(r"(?:allergic to|allergy to|allergies?:)\s*([^.,;\n]+)",
                      re.IGNORECASE)
 MEDICATION = re.compile(r"(?:taking|on|using)\s+([A-Za-z][A-Za-z0-9 \-]{2,30})",
                         re.IGNORECASE)
+DIET = re.compile(r"(?:my\s+)?diet(?:\s+is|\s*:)?\s*([^.,;\n]{2,120})",
+                  re.IGNORECASE)
 NAME = re.compile(r"(?:my name is|i am|i'm|this is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)")
 
 
@@ -192,6 +199,10 @@ def _rule_analyze(text: str, case: dict) -> dict:
     if med and "taking" in lowered:
         data["patient"]["medications"] = [med.group(1).strip()]
 
+    diet = DIET.search(text)
+    if diet:
+        data["patient"]["diet"] = diet.group(1).strip(" .")
+
     if not case.get("chief_complaint") and data["symptoms"]:
         data["chief_complaint"] = data["symptoms"][0][0].upper() + \
             data["symptoms"][0][1:] + " reported by the patient"
@@ -286,6 +297,7 @@ def handle_message(case: dict, text: str) -> dict:
                 "emergency": True, "engine": engine}
 
     case_model.merge_analysis(case, data)
+    case_model.ensure_summary(case)
     case["engine"] = engine
     reply = _reply_text(data.get("reply")) or copy.ASK_MORE
     reply, guarded = safety.guard_reply(reply)
@@ -327,7 +339,7 @@ def attach_report(case_id: str, filename: str, content: bytes,
     case.setdefault("reports", []).append(entry)
     case_model.ensure_summary(case)
     findings = case["summary"].setdefault("key_findings", [])
-    line = f"Lab report {entry['filename']}: {parsed['summary']}"
+    line = f"Document {entry['filename']}: {parsed['summary']}"
     if line not in findings:
         findings.append(line[:400])
     abnormal = [f for f in parsed["findings"] if f.get("flag")]
@@ -338,10 +350,28 @@ def attach_report(case_id: str, filename: str, content: bytes,
     _audit(case, "patient", "report_uploaded",
            f"{entry['filename']} ({entry['size']} bytes, "
            f"{len(parsed['findings'])} findings)")
-    _say(case, f"Report received: {entry['filename']}. "
-               f"{parsed['summary']}", engine="report-reader")
+    _say(case, _document_question(entry, parsed), engine="report-reader")
     store.save_case(case)
     return case
+
+
+def _document_question(entry: dict, parsed: dict) -> str:
+    """Open a document-aware conversation without inventing a diagnosis."""
+    name = entry.get("filename") or "the document"
+    findings = parsed.get("findings") or []
+    abnormal = [item for item in findings if item.get("flag")]
+    if abnormal:
+        first = abnormal[0]
+        unit = f" {first.get('unit')}" if first.get("unit") else ""
+        return (f"I read {name}. I can see {len(abnormal)} value(s) outside the "
+                f"reference range, including {first.get('test')} "
+                f"{first.get('value')}{unit} ({first.get('flag')}). Is this "
+                "report related to your current symptoms, and when was it taken?")
+    if findings:
+        return (f"I read {name} and found {len(findings)} result(s). Is this "
+                "related to your current symptoms, and when was the test taken?")
+    return (f"I read {name}. Is it related to your current symptoms? What did "
+            "your doctor say about it?")
 
 
 def choose_option(case_id: str, option: str) -> dict | None:
@@ -499,6 +529,7 @@ def _case_brief(case: dict) -> str:
         {key: value for key, value in report.items() if key != "path"}
         for report in case.get("reports", [])
     ]
+    brief["prior_cases"] = store.prior_cases(case, limit=4)
     return json.dumps(brief, ensure_ascii=False)
 
 
