@@ -11,6 +11,8 @@ import re
 import uuid
 from datetime import datetime, timezone
 
+import payments
+
 
 STATUS_INTAKE = "intake"
 STATUS_EMERGENCY = "emergency"
@@ -65,6 +67,7 @@ def new_case(patient_name: str = "") -> dict:
         "doctor": {"notes": "", "advice": "", "prescription": "",
                    "approved_by": "", "approved_at": ""},
         "email": {"to": "", "subject": "", "mode": "", "sent_at": ""},
+        "payment": payments.new_payment(),
         "transcript": [],
     }
 

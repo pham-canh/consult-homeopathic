@@ -16,6 +16,7 @@ import config
 import emailer
 import text as copy
 import inference
+import payments
 import reports
 import safety
 import store
@@ -433,6 +434,7 @@ def approve(case_id: str, *, advice: str, prescription: str = "",
         raise WorkflowError("Advice is required before approval.")
 
     case_model.ensure_summary(case)
+    payments.ensure(case)
     case["doctor"] = {
         "notes": (notes or "").strip()[:2000],
         "advice": advice.strip()[:4000],

@@ -420,6 +420,24 @@ function renderDrawer() {
   bindDecision();
 }
 
+function renderPayment(item) {
+  const payment = item.payment || {};
+  if (!payment.amount_display) return "";
+  const paid = payment.status === "paid_demo";
+  return `
+    <div class="detail-card">
+      <h3>Consultation fee <span class="small muted">demo only</span></h3>
+      <dl class="kv">
+        <dt>Amount</dt><dd>${escapeHtml(payment.amount_display)}</dd>
+        <dt>Status</dt><dd><span class="state ${paid ? "sent" : "due"}">${paid ? "Paid (demo)" : "Unpaid"}</span></dd>
+        <dt>Method</dt><dd>${escapeHtml(payment.method_label || "—")}</dd>
+        <dt>Paid at</dt><dd>${escapeHtml(payment.paid_at ? fmtDate(payment.paid_at) : "—")}</dd>
+      </dl>
+      <p class="small muted">${escapeHtml(payment.note || "")}</p>
+      ${payment.link ? `<p class="small"><a href="${escapeHtml(payment.link)}" target="_blank" rel="noopener">Open demo payment page</a></p>` : ""}
+    </div>`;
+}
+
 function renderSummary(item) {
   const patient = item.patient || {};
   const follow = item.follow_up || {};
@@ -465,6 +483,7 @@ function renderSummary(item) {
             ${prior.doctor_advice ? ` — ${escapeHtml(prior.doctor_advice)}` : ""}</span>
         </div>`).join("")}</div>
     </div>` : ""}
+    ${renderPayment(item)}
     <div class="detail-card">
       <h3>Case</h3>
       <dl class="kv">

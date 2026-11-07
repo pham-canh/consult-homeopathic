@@ -55,6 +55,7 @@ staff credentials.
 | Human approval | `/approve` is the only path that sends a plan; approval is single-use and blocked for emergency cases |
 | Email delivery | Real SMTP when configured, otherwise a labelled `.eml` outbox |
 | Follow-up agent | Check-in is scheduled after approval, emailed with a token link, asks about diet/appetite when relevant, and escalates automatically on a red flag |
+| Demo consultation fee | Clearly labelled demo-only fee after approval; the plan email includes a `/pay/<token>` link, the patient records a local `paid_demo` receipt, and the doctor dashboard shows the status. No card data, provider call, or real charge. |
 | Safety checks | Allergy cross-reactivity and a short, visible drug-interaction list |
 | Audit trail | Every patient, agent, safety, and doctor action is timestamped |
 | Voice | Push-to-talk recording -> Gemini transcription -> the existing intake agent -> spoken reply; the key stays server-side. OpenAI audio is a fallback. |
@@ -62,8 +63,10 @@ staff credentials.
 | Operations | Health check, SQLite persistence, Dockerfile, systemd unit, Caddy HTTPS, Vultr provisioning script |
 
 Core and stretch features from the project overview are therefore present. The
-only deliberately excluded items are real patient data, payments, video calls,
-doctor identity verification, and automated diagnosis or prescribing.
+only deliberately excluded items are real patient data, real payment
+processing, video calls, doctor identity verification, and automated diagnosis
+or prescribing. The consultation fee is a local demo receipt, not a payment
+integration.
 
 ## Voice and documents
 
@@ -152,7 +155,7 @@ One JSON case record is shared by both flows. Key fields: `case_id`, `patient`
 (name, email, age, sex, allergies, medications, history),
 `chief_complaint`, `symptoms`, `duration_days`, `severity`, `red_flags`,
 `urgency`, `reports`, `care_options`, `selected_option`, `summary`, `doctor`,
-`email`, `follow_up`, `transcript`, `needs_attention`, and `status`
+`email`, `follow_up`, `payment`, `transcript`, `needs_attention`, and `status`
 (`intake` → `pending_review` → `delivered`, or `emergency`).
 
 ## How Vultr powers the solution
@@ -236,7 +239,7 @@ restart.
 Without a key the app still runs and says so: intake falls back to the
 deterministic rule engine, and `/healthz` reports `llm_key: false`.
 
-Run the tests (no network, no key, 81 tests):
+Run the tests (no network, no key, 85 tests):
 
 ```bash
 CONSULT_FAKE_LLM=1 CONSULT_DISABLE_SCHEDULER=1 python3 -m pytest tests/ -q
@@ -285,7 +288,8 @@ rotate the shared password.
 | GET | `/doctor` | clinic operations dashboard (password-protected when configured) |
 | GET | `/login` | dashboard sign-in page |
 | GET | `/follow-up/{token}` | public check-in page |
-| GET | `/healthz` | storage, model, key, voice, scheduler, dashboard auth flag |
+| GET | `/pay/{token}` | public demo consultation-fee page |
+| GET | `/healthz` | storage, model, key, voice, payments, scheduler, dashboard auth flag |
 | POST | `/api/auth/login` | exchange the dashboard password for a session |
 | GET | `/api/auth/me` | current session state |
 | POST | `/api/auth/logout` | clear the session cookie |
@@ -301,6 +305,7 @@ rotate the shared password.
 | POST | `/api/cases/{id}/follow-up` | log a follow-up report |
 | POST | `/api/cases/{id}/follow-up/send` | send the scheduled check-in now |
 | GET/POST | `/api/follow-up/{token}` | read/submit the public check-in |
+| GET/POST | `/api/pay/{token}` | read/record the public demo consultation fee |
 | GET | `/api/mailbox` | sent-plan and check-in outbox |
 | GET | `/api/emails/{id}` | open one outbox email by id |
 | GET | `/api/cases/{id}` | full case, documents, prior visits, audit trail, warnings |
@@ -308,8 +313,8 @@ rotate the shared password.
 
 Staff endpoints (`/api/doctor/cases`, `/api/dashboard`, `/api/followups`,
 case detail/approve/follow-up, mailbox and email bodies) require a valid session
-when `CONSULT_DASHBOARD_PASSWORD` is set. Patient intake, choice and public
-follow-up endpoints stay open. Invalid state transitions return `409`; invalid
+when `CONSULT_DASHBOARD_PASSWORD` is set. Patient intake, choice, public
+follow-up and demo payment endpoints stay open. Invalid state transitions return `409`; invalid
 uploads return `400`; unknown cases and tokens return `404`; unauthenticated
 staff requests return `401`.
 
@@ -386,11 +391,14 @@ The image runs as a non-root user and stores SQLite, reports, and emails in the
    guidance.
 3. Clinic dashboard: sign in, scan Overview, open the pending case from Cases,
    inspect the summary, lab values and allergy warning, then approve.
-4. Open the outbox and show the exact plan email; the follow-up link is in it.
-5. Send the check-in now and open the public link; submit "chest pain" to show
+4. Open the outbox and show the exact plan email; the follow-up and demo
+   payment links are in it.
+5. Open the payment link, choose a demo method, and show the `paid_demo`
+   receipt on the patient page and in the case drawer.
+6. Send the check-in now and open the public link; submit "chest pain" to show
    the automatic escalation and the `needs_attention` banner.
 
-To make step 5 instant in a demo, set `FOLLOWUP_DAYS=0`.
+To make step 6 instant in a demo, set `FOLLOWUP_DAYS=0`.
 
 ## Submission assets
 
@@ -403,8 +411,9 @@ To make step 5 instant in a demo, set `FOLLOWUP_DAYS=0`.
 
 ## What is deliberately out of scope
 
-Real patient data, real payments, video calls, doctor identity verification, and
-automated diagnosis or prescribing. The dashboard supports shared-password
+Real patient data, real payment processing, video calls, doctor identity
+verification, and automated diagnosis or prescribing. The demo consultation fee
+records a local receipt only; it is not a payment integration. The dashboard supports shared-password
 access for this demo; production still needs per-user identity, MFA, consent,
 encryption at rest, and health-data compliance.
 

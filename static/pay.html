@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Consultation fee (demo) — Consult Homeopathic Physicians</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="dot">✚</div>
+      <div>Consult <small>Homeopathic Physicians · hackathon prototype</small></div>
+    </div>
+    <div class="top-actions">
+      <span class="pill amber">Demo payment</span>
+      <a class="btn ghost small" href="/">Patient app</a>
+    </div>
+  </header>
+
+  <main class="wrap narrow">
+    <section class="card pay-card">
+      <span class="pill amber">Demo only — no real charge</span>
+      <h1>Consultation fee</h1>
+      <p class="muted" id="pay-meta">Loading payment details…</p>
+      <div class="pay-amount" id="pay-amount">—</div>
+      <div id="pay-body">
+        <p class="muted">Loading…</p>
+      </div>
+      <p class="small muted" id="pay-note">
+        This is a hackathon prototype. No card details are collected, no payment
+        provider is contacted, and no money moves.
+      </p>
+    </section>
+  </main>
+
+  <script src="/static/pay.js"></script>
+</body>
+</html>

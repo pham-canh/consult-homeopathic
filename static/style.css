@@ -214,3 +214,14 @@ a { color: var(--teal); }
   .kv { grid-template-columns: 110px 1fr; }
   .layout { grid-template-columns: 1fr; }
 }
+.pay-card { padding: 28px; }
+.pay-amount { font-size: 44px; font-weight: 800; letter-spacing: -.04em; margin: 6px 0 18px; }
+.pay-methods { display: grid; gap: 8px; margin: 12px 0 16px; }
+.pay-method {
+  display: flex; align-items: center; gap: 10px; padding: 11px 12px;
+  border: 1px solid var(--line); border-radius: 10px; background: #fff;
+  font-size: 14px; cursor: pointer;
+}
+.pay-method:has(input:checked) { border-color: var(--teal); background: var(--teal-soft); }
+.pay-receipt { border: 1px solid var(--line); border-radius: 12px; padding: 16px; background: #f6faf8; }
+.pay-receipt p { margin: 10px 0 0; }

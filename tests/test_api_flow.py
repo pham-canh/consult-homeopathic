@@ -33,7 +33,7 @@ def ready_case(monkeypatch):
 def test_healthz_reports_version_and_scheduler():
     data = client.get("/healthz").json()
     assert data["status"] == "ok"
-    assert data["version"] == "2.3.0"
+    assert data["version"] == "2.4.0"
     assert "followups" in data
     assert data["storage"]["cases"] >= 0
 

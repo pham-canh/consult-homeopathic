@@ -38,7 +38,10 @@ tabbed case records (summary, documents, conversation, decision, audit), a
 follow-up queue, the full outbox, and runtime settings. The doctor reads the
 summary, sees allergy and drug-interaction warnings, the document findings, and the
 full conversation, then edits and approves the plan. The approved plan is
-emailed, and a follow-up check-in is scheduled. If the patient reports a red flag
+emailed, and a follow-up check-in is scheduled. The email also includes a
+clearly labelled demo consultation-fee link; it records a local receipt and
+never collects card details or contacts a payment provider. If the patient
+reports a red flag
 on the public check-in link, the case escalates and the clinic is alerted.
 Prior visits are linked by the email the patient supplied and shown as context
 for the doctor. The follow-up check-in asks about appetite and diet when
@@ -130,15 +133,16 @@ per-user identity, MFA, and consent management.
   outbox, runtime settings, shared-password sessions
 - Email delivery (real SMTP when configured; otherwise a labelled `.eml` outbox)
 - Follow-up scheduling, public token check-in, automatic escalation
+- Demo-only consultation fee with a local `paid_demo` receipt and dashboard status
 - Audit trail and health reporting
 - Provider-agnostic inference with a hidden-prompt CLI for team keys
-- 81 automated tests, Dockerfile, systemd unit, Caddy config, Vultr provisioner
+- 85 automated tests, Dockerfile, systemd unit, Caddy config, Vultr provisioner
 - Dedicated Vultr VM deployment
 
 ## Honest limitations
 
 - Email uses a simulated outbox unless SMTP credentials are supplied.
-- No real patient data, no video calls, no payments, no doctor verification.
+- No real patient data, no video calls, no real payment processing, no doctor verification. The consultation fee is a demo receipt only.
 - The allergy and interaction lists are small and explicit, not a clinical
   database. The model summary is assistance, not a diagnosis.
 - Image-based documents are rejected; only text, CSV and PDF are parsed.

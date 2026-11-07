@@ -33,13 +33,14 @@ import dashboard  # noqa: E402
 import emailer  # noqa: E402
 import followups  # noqa: E402
 import inference  # noqa: E402
+import payments  # noqa: E402
 import reports  # noqa: E402
 import store  # noqa: E402
 import voice  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT / "static"
-VERSION = "2.3.0"
+VERSION = "2.4.0"
 
 
 @asynccontextmanager
@@ -140,6 +141,10 @@ class FollowUpIn(BaseModel):
     report: str = Field(min_length=1, max_length=2000)
 
 
+class PaymentIn(BaseModel):
+    method: str = Field(min_length=1, max_length=40)
+
+
 class LoginIn(BaseModel):
     password: str = Field(min_length=1, max_length=200)
 
@@ -153,10 +158,14 @@ def _public_case(case: dict, *, staff: bool = False) -> dict:
         {key: value for key, value in report.items() if key != "path"}
         for report in case.get("reports", [])
     ]
+    payment = payments.public(case)
+    if staff and token:
+        payment["link"] = f"{emailer.public_url()}/pay/{token}"
     return {
         **case,
         "reports": public_reports,
         "follow_up": follow,
+        "payment": payment,
         "allergy_warnings": case_model.allergy_warnings(case),
         "interaction_warnings": case_model.interaction_warnings(case),
         "audit": store.list_audit(case["case_id"]),
@@ -196,6 +205,12 @@ def healthz() -> dict:
             "stt_model": voice.stt_model() if voice.enabled() else None,
             "tts_model": voice.tts_model() if voice.enabled() else None,
             "tts_voice": voice.tts_voice() if voice.enabled() else None,
+        },
+        "payments": {
+            "demo": True,
+            "amount": payments.amount_display(),
+            "currency": payments.currency(),
+            "note": payments.DEMO_NOTE,
         },
         "followups": {**followups.status(),
                       "poll_seconds": config.env("FOLLOWUP_POLL_SECONDS", "60")},
@@ -257,6 +272,12 @@ def followup_page(token: str) -> FileResponse:
     if not store.get_followup_by_token(token):
         raise HTTPException(status_code=404, detail="follow-up link not found")
     return FileResponse(STATIC / "followup.html")
+
+
+@app.get("/pay/{token}")
+def payment_page(token: str) -> FileResponse:
+    _payment_case(token)
+    return FileResponse(STATIC / "pay.html")
 
 
 @app.post("/api/intake/start")
@@ -417,6 +438,60 @@ def send_follow_up_now(case_id: str) -> dict:
     if not row:
         raise agent.WorkflowError("No follow-up is scheduled for this case.")
     return {"follow_up": row, "case": _public_case(_require(case_id), staff=True)}
+
+
+def _payment_case(token: str) -> dict:
+    row = store.get_followup_by_token(token)
+    if not row:
+        raise HTTPException(status_code=404, detail="payment link not found")
+    case = store.get_case(row["case_id"])
+    if not case:
+        raise HTTPException(status_code=404, detail="case not found")
+    if not (case.get("doctor") or {}).get("approved_at"):
+        raise HTTPException(status_code=409,
+                            detail="Payment is available after doctor approval.")
+    return case
+
+
+@app.get("/api/pay/{token}")
+def get_payment(token: str) -> dict:
+    case = _payment_case(token)
+    return {
+        "payment": payments.public(case),
+        "case": {
+            "case_id": case["case_id"],
+            "patient_name": (case.get("patient") or {}).get("name", ""),
+            "status": case.get("status", ""),
+            "approved_at": (case.get("doctor") or {}).get("approved_at", ""),
+        },
+    }
+
+
+@app.post("/api/pay/{token}")
+def pay_demo_fee(token: str, body: PaymentIn) -> dict:
+    case = _payment_case(token)
+    was_paid = (case.get("payment") or {}).get("status") == "paid_demo"
+    try:
+        payment = payments.pay(case, body.method)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not was_paid:
+        case["updated_at"] = case_model.now()
+        store.add_audit(
+            case["case_id"], "patient", "payment_demo_paid",
+            f"{payment['method_label']} {payment['amount_display']} (demo only)",
+            case_model.now())
+        store.save_case(case)
+    return {
+        "payment": payments.public(case),
+        "receipt": {
+            "case_id": case["case_id"],
+            "amount": payment["amount_display"],
+            "method": payment["method_label"],
+            "paid_at": payment["paid_at"],
+            "demo": True,
+        },
+    }
 
 
 def _public_followup(token: str) -> dict:

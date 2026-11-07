@@ -11,6 +11,7 @@ from email.message import EmailMessage
 from pathlib import Path
 
 from config import env, mailbox_dir
+import payments
 
 
 def public_url() -> str:
@@ -40,10 +41,15 @@ def compose(case: dict) -> tuple[str, str, str]:
     if doctor.get("notes"):
         lines += ["Doctor notes:", doctor["notes"].strip(), ""]
     if case.get("follow_up", {}).get("token"):
-        link = f"{public_url()}/follow-up/{case['follow_up']['token']}"
+        token = case["follow_up"]["token"]
+        pay_link = f"{public_url()}/pay/{token}"
+        follow_link = f"{public_url()}/follow-up/{token}"
         lines += [
+            f"Consultation fee (demo only — no real charge): {payments.amount_display()}",
+            f"Choose a demo payment method here: {pay_link}",
+            "",
             "Follow-up check:",
-            f"We will check in on you. You can also report how you feel here: {link}",
+            f"We will check in on you. You can also report how you feel here: {follow_link}",
             "",
         ]
     lines += [

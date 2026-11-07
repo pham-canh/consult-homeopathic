@@ -31,7 +31,10 @@ duplicate check-in cannot be sent by two workers.
 6. `approve` requires `pending_review`, writes the doctor decision, and sends
    email before persisting delivery. If sending fails, the case stays pending so
    a doctor can retry rather than a half-delivered record appearing complete.
-7. The follow-up agent sends the scheduled check-in. A public token link accepts
+7. `approve` also ensures a demo consultation-fee record. The plan email links
+   to `/pay/<token>`; recording a method writes a local `paid_demo` receipt and
+   an audit entry. No card data or payment provider is involved.
+8. The follow-up agent sends the scheduled check-in. A public token link accepts
    patient updates; a red flag escalates to `emergency` and sets
    `needs_attention`.
 
@@ -47,6 +50,7 @@ duplicate check-in cannot be sent by two workers.
 | Upload → summary | File type and size are checked; parsed values are labelled; the original is staff-only |
 | Voice → case state | Audio is transcribed server-side and discarded; the transcript passes the same red-flag gate |
 | Follow-up token | Opaque random token; one public check-in form per link |
+| Payment token | Opaque random token, available after approval; records a demo receipt only |
 | Dashboard session | Shared password → HMAC-signed cookie; staff APIs require it |
 
 ## Dashboard access
@@ -65,6 +69,7 @@ choice and public follow-up token routes never require the session.
 - `audit`: append-only action log (timestamp, actor, action, detail).
 - `emails`: outbox index (subject, recipient, mode, path).
 - `followups`: due time, token, sent marker.
+- `payment`: per-case demo fee status, method, and receipt timestamp (inside the case JSON).
 - Prior visits: derived by matching the patient email; they are context for the
   doctor and agent, not a verified patient identity.
 
@@ -105,6 +110,8 @@ time. The clinical reasoning provider remains independent.
 
 The dashboard supports shared-password access for the demo; the live deployment
 may require the credential shared with judges. This is one clinic-wide password,
-not per-user identity. Production needs per-user authentication, per-role
+not per-user identity. The consultation fee is intentionally demo-only: it
+stores a receipt locally, collects no card data, and makes no payment-provider
+call. Real payment processing needs a separate PCI/compliant design. Production needs per-user authentication, per-role
 authorization, MFA, consent, encryption at rest, and health-data compliance; the
 app uses synthetic data only.
