@@ -1,0 +1,7 @@
+Synthetic laboratory report - demo only
+Patient: Maya Chen
+
+Hemoglobin 11.2 g/dL (13.5-17.5)
+White blood cell count 14.8 x10^9/L (4.0-11.0)
+Platelets 240 x10^9/L (150-400)
+C-reactive protein 28 mg/L (0-5)

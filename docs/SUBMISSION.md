@@ -105,7 +105,9 @@ OpenAI-compatible endpoints), Gemini audio API, Caddy, systemd, Docker (optional
 - Source: this repository
 - Cover: `docs/cover.png`
 - Slide deck: `docs/pitch.pdf`
-- This is a code-only submission; no video is included.
+- Demo video (unlisted YouTube): https://www.youtube.com/watch?v=HjFQYl0-J6o
+- Certificate of completion: https://lablab.build/u/@PhamCanh459/ai-hackathons/vultr-hackathon/certificate
+- Video script: `docs/VIDEO_SCRIPT.md`
 
 ## Tags
 

@@ -16,8 +16,11 @@ push-to-talk voice), screens for emergency red flags, reads an uploaded
 document, proposes care options, and prepares a structured case. A licensed doctor reviews that case on a dashboard,
 edits the plan, and approves it. Only then is the plan emailed to the patient.
 The agent never diagnoses and never prescribes.
+Demo video (unlisted YouTube): https://www.youtube.com/watch?v=HjFQYl0-J6o
 
-This is a code-only submission; no demo video is included.
+Certificate of completion (Vultr: Agent Rush Hackathon):
+https://lablab.build/u/@PhamCanh459/ai-hackathons/vultr-hackathon/certificate
+
 
 ## Try the live demo
 
@@ -35,7 +38,10 @@ Fast path for judges:
 2. Open the doctor dashboard, sign in as `doctor`, and open the pending case.
 3. Review the summary, documents, conversation and safety warnings, then approve
    a plan. The plan appears in **Outbox** and a follow-up check-in is scheduled.
-4. Open the follow-up link and report a red-flag symptom. The case escalates to
+4. Open the plan email and the case drawer. Both point to the demo-only payment
+   page; record the demo fee to see the receipt, the `paid_demo` status and the
+   audit entry. No card details or real charge are involved.
+5. Open the follow-up link and report a red-flag symptom. The case escalates to
    **Emergency** and appears in the dashboard attention queue.
 
 The dashboard needs a login because it exposes patient cases and can approve
@@ -407,7 +413,11 @@ To make step 6 instant in a demo, set `FOLLOWUP_DAYS=0`.
 - `docs/cover.png` — 1200×630 submission cover
 - `docs/pitch.pdf` — 10-slide project deck
 - `docs/ui.png`, `docs/doctor.png`, `docs/case.png`, `docs/documents.png` — intake, dashboard, case-record and document-review screenshots
-- This is a code-only submission; no video is included.
+- `docs/VIDEO_SCRIPT.md` — timed demo script, shot list and recording checklist
+- `docs/sample-lab.txt` — synthetic lab report used in the demo
+- Demo video (unlisted YouTube): https://www.youtube.com/watch?v=HjFQYl0-J6o
+- Certificate of completion: https://lablab.build/u/@PhamCanh459/ai-hackathons/vultr-hackathon/certificate
+- `docs/certificate.png` — certificate image
 
 ## What is deliberately out of scope
 
